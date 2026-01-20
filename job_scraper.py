@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-AI/ML Job Scraper - RATE LIMIT SAFE VERSION
-- Smart pagination (only when needed)
-- Exponential backoff on 429 errors
-- Configurable results per query
-- Rate limit handling
+AI/ML Job Scraper - CORRECTED VERSION
+- Filters senior roles AFTER search (Google ignores -senior in queries)
+- Rate limit safe with exponential backoff
+- US-only positions
 """
 
 import requests
@@ -16,7 +15,6 @@ import os
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 # Configuration
@@ -24,231 +22,185 @@ GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 SEARCH_ENGINE_ID = os.getenv('SEARCH_ENGINE_ID')
 OUTPUT_FILE = os.getenv('OUTPUT_FILE', 'ai_ml_jobs.csv')
 SEEN_JOBS_FILE = os.getenv('SEEN_JOBS_FILE', 'seen_jobs.json')
-DELAY_BETWEEN_SEARCHES = int(os.getenv('DELAY_BETWEEN_SEARCHES', 2))  # Increased to 2 seconds
+DELAY_BETWEEN_SEARCHES = int(os.getenv('DELAY_BETWEEN_SEARCHES', 2))
 
-# Pagination settings (set to False to avoid rate limits)
-ENABLE_PAGINATION = False  # Set to True only if you have paid API
-RESULTS_PER_QUERY = 10  # 10 if ENABLE_PAGINATION=False, 30 if True
-
-# SEARCHES - Optimized to fit within free tier (100 searches/day)
+# SEARCHES (removed -senior filters since Google ignores them anyway)
 SEARCHES = [
     # ========================================
-    # PRIORITY: NYC + SF + BOSTON + REMOTE
+    # UNITED STATES - NATIONWIDE (NEW)
     # ========================================
 
-    # NYC - Core roles
     {
-        "query": '("AI Engineer" OR "Machine Learning Engineer") ("New York" OR "NYC") site:ashbyhq.com -senior -staff -principal',
-        "location": "NYC, US",
+        "query": '("AI Engineer" OR "Machine Learning Engineer") "United States" site:ashbyhq.com',
+        "location": "United States",
         "role": "AI/ML Engineer",
-        "ats": "Ashby",
-        "priority": "high"
+        "ats": "Ashby"
     },
     {
-        "query": '("AI Engineer" OR "ML Engineer") ("New York" OR "NYC") site:greenhouse.io -senior -staff',
-        "location": "NYC, US",
+        "query": '("AI Engineer" OR "ML Engineer") "United States" site:greenhouse.io',
+        "location": "United States",
         "role": "AI/ML Engineer",
-        "ats": "Greenhouse",
-        "priority": "high"
+        "ats": "Greenhouse"
     },
     {
-        "query": '("LLM Engineer" OR "Generative AI Engineer") ("New York" OR "NYC") site:ashbyhq.com -senior',
-        "location": "NYC, US",
+        "query": '("LLM Engineer" OR "Generative AI Engineer") "United States" site:ashbyhq.com',
+        "location": "United States",
         "role": "LLM Engineer",
-        "ats": "Ashby",
-        "priority": "high"
+        "ats": "Ashby"
+    },
+    {
+        "query": '("Applied Scientist") "United States" site:myworkdayjobs.com',
+        "location": "United States",
+        "role": "Applied Scientist",
+        "ats": "Workday"
+    },
+    {
+        "query": '("Machine Learning Engineer" OR "ML Engineer") "USA" site:lever.co',
+        "location": "United States",
+        "role": "ML Engineer",
+        "ats": "Lever"
     },
 
-    # SF/Bay Area - Core roles
+    # ========================================
+    # NYC - CITY SPECIFIC
+    # ========================================
+
     {
-        "query": '("AI Engineer" OR "Machine Learning Engineer") ("San Francisco" OR "Bay Area") site:ashbyhq.com -senior -staff',
-        "location": "SF/Bay Area, US",
+        "query": '("AI Engineer" OR "Machine Learning Engineer") ("New York" OR "NYC") site:ashbyhq.com',
+        "location": "NYC, US",
         "role": "AI/ML Engineer",
-        "ats": "Ashby",
-        "priority": "high"
+        "ats": "Ashby"
     },
     {
-        "query": '("LLM Engineer" OR "Generative AI Engineer") ("San Francisco" OR "Palo Alto") site:ashbyhq.com -senior',
-        "location": "SF/Bay Area, US",
+        "query": '("AI Engineer" OR "ML Engineer") ("New York" OR "NYC") site:greenhouse.io',
+        "location": "NYC, US",
+        "role": "AI/ML Engineer",
+        "ats": "Greenhouse"
+    },
+    {
+        "query": '("LLM Engineer") ("New York" OR "NYC") site:ashbyhq.com',
+        "location": "NYC, US",
         "role": "LLM Engineer",
-        "ats": "Ashby",
-        "priority": "high"
-    },
-    {
-        "query": '("ML Engineer" OR "AI Engineer") ("San Francisco" OR "Mountain View") site:greenhouse.io -senior',
-        "location": "SF/Bay Area, US",
-        "role": "AI/ML Engineer",
-        "ats": "Greenhouse",
-        "priority": "high"
+        "ats": "Ashby"
     },
 
-    # Boston - Your location
+    # ========================================
+    # SF/BAY AREA - CITY SPECIFIC
+    # ========================================
+
     {
-        "query": '("AI Engineer" OR "Machine Learning Engineer") ("Boston" OR "Cambridge") site:ashbyhq.com -senior',
+        "query": '("AI Engineer" OR "Machine Learning Engineer") ("San Francisco" OR "Bay Area") site:ashbyhq.com',
+        "location": "SF/Bay Area, US",
+        "role": "AI/ML Engineer",
+        "ats": "Ashby"
+    },
+    {
+        "query": '("LLM Engineer") ("San Francisco") site:ashbyhq.com',
+        "location": "SF/Bay Area, US",
+        "role": "LLM Engineer",
+        "ats": "Ashby"
+    },
+    {
+        "query": '("ML Engineer" OR "AI Engineer") ("San Francisco") site:greenhouse.io',
+        "location": "SF/Bay Area, US",
+        "role": "AI/ML Engineer",
+        "ats": "Greenhouse"
+    },
+
+    # ========================================
+    # BOSTON - CITY SPECIFIC
+    # ========================================
+
+    {
+        "query": '("AI Engineer" OR "Machine Learning Engineer") ("Boston" OR "Cambridge") site:ashbyhq.com',
         "location": "Boston, US",
         "role": "AI/ML Engineer",
-        "ats": "Ashby",
-        "priority": "high"
+        "ats": "Ashby"
     },
     {
-        "query": '("ML Engineer") ("Boston" OR "Cambridge") site:greenhouse.io -senior',
+        "query": '("ML Engineer") ("Boston" OR "Cambridge") site:greenhouse.io',
         "location": "Boston, US",
         "role": "ML Engineer",
-        "ats": "Greenhouse",
-        "priority": "high"
+        "ats": "Greenhouse"
     },
     {
-        "query": '("LLM Engineer" OR "NLP Engineer") ("Boston" OR "Cambridge") site:ashbyhq.com -senior',
+        "query": '("LLM Engineer") ("Boston") site:ashbyhq.com',
         "location": "Boston, US",
-        "role": "LLM/NLP Engineer",
-        "ats": "Ashby",
-        "priority": "high"
+        "role": "LLM Engineer",
+        "ats": "Ashby"
     },
 
-    # Remote - Critical
+    # ========================================
+    # SEATTLE - CITY SPECIFIC
+    # ========================================
+
     {
-        "query": '("AI Engineer" OR "Machine Learning Engineer") ("remote" OR "hybrid") ("US only" OR "work authorization") site:ashbyhq.com -senior -canada -uk',
-        "location": "Remote, US",
+        "query": '("AI Engineer" OR "Machine Learning Engineer") "Seattle" site:ashbyhq.com',
+        "location": "Seattle, US",
         "role": "AI/ML Engineer",
-        "ats": "Ashby",
-        "priority": "high"
+        "ats": "Ashby"
     },
     {
-        "query": '("AI Engineer") ("remote US" OR "US remote") site:greenhouse.io -senior -canada',
+        "query": '("ML Engineer") "Seattle" site:greenhouse.io',
+        "location": "Seattle, US",
+        "role": "ML Engineer",
+        "ats": "Greenhouse"
+    },
+
+    # ========================================
+    # REMOTE - US ONLY
+    # ========================================
+
+    {
+        "query": '("AI Engineer" OR "Machine Learning Engineer") ("remote" OR "hybrid") site:ashbyhq.com -canada -uk',
+        "location": "Remote, US",
+        "role": "AI/ML Engineer",
+        "ats": "Ashby"
+    },
+    {
+        "query": '("AI Engineer") ("remote US") site:greenhouse.io -canada',
         "location": "Remote, US",
         "role": "AI Engineer",
-        "ats": "Greenhouse",
-        "priority": "high"
+        "ats": "Greenhouse"
     },
     {
-        "query": '("Machine Learning Engineer") ("remote United States" OR "USA remote") site:ashbyhq.com -senior -canada',
+        "query": '("Machine Learning Engineer") ("remote United States") site:ashbyhq.com -canada',
         "location": "Remote, US",
         "role": "ML Engineer",
-        "ats": "Ashby",
-        "priority": "high"
+        "ats": "Ashby"
     },
     {
-        "query": '("LLM Engineer") ("remote" OR "work from home") ("US only" OR "authorized to work in the US") site:ashbyhq.com -senior',
+        "query": '("LLM Engineer") ("remote") site:ashbyhq.com -canada',
         "location": "Remote, US",
         "role": "LLM Engineer",
-        "ats": "Ashby",
-        "priority": "high"
+        "ats": "Ashby"
     },
 
     # ========================================
-    # WIDE NET: Applied Scientist, Research Engineer, etc.
+    # APPLIED SCIENTIST - VARIOUS LOCATIONS
     # ========================================
 
     {
         "query": '("Applied Scientist") ("New York" OR "San Francisco" OR "Seattle") site:myworkdayjobs.com',
         "location": "Various, US",
         "role": "Applied Scientist",
-        "ats": "Workday",
-        "priority": "medium"
+        "ats": "Workday"
     },
     {
-        "query": '("Applied Scientist") ("remote") ("US only" OR "United States") site:ashbyhq.com -canada',
+        "query": '("Applied Scientist") ("remote") site:ashbyhq.com -canada',
         "location": "Remote, US",
         "role": "Applied Scientist",
-        "ats": "Ashby",
-        "priority": "medium"
-    },
-    {
-        "query": '("Research Engineer" OR "ML Research Engineer") ("New York" OR "San Francisco" OR "Boston") site:ashbyhq.com',
-        "location": "Various, US",
-        "role": "Research Engineer",
-        "ats": "Ashby",
-        "priority": "medium"
-    },
-    {
-        "query": '("ML Platform Engineer" OR "ML Infrastructure Engineer") ("San Francisco" OR "New York") site:ashbyhq.com',
-        "location": "Various, US",
-        "role": "ML Platform Engineer",
-        "ats": "Ashby",
-        "priority": "medium"
-    },
-    {
-        "query": '("Machine Learning Scientist" OR "ML Scientist") ("New York" OR "San Francisco" OR "Boston") site:ashbyhq.com',
-        "location": "Various, US",
-        "role": "ML Scientist",
-        "ats": "Ashby",
-        "priority": "medium"
-    },
-
-    # ========================================
-    # SECONDARY MARKETS
-    # ========================================
-
-    {
-        "query": '("AI Engineer" OR "Machine Learning Engineer") "Seattle" site:ashbyhq.com -senior',
-        "location": "Seattle, US",
-        "role": "AI/ML Engineer",
-        "ats": "Ashby",
-        "priority": "medium"
-    },
-    {
-        "query": '("ML Engineer") "Seattle" site:greenhouse.io -senior',
-        "location": "Seattle, US",
-        "role": "ML Engineer",
-        "ats": "Greenhouse",
-        "priority": "medium"
-    },
-
-    # ========================================
-    # TOP COMPANIES (Direct searches)
-    # ========================================
-
-    {
-        "query": 'site:openai.com/careers ("engineer" OR "researcher") -senior',
-        "location": "Various, US",
-        "role": "Engineer/Researcher",
-        "ats": "OpenAI",
-        "priority": "high"
-    },
-    {
-        "query": 'site:anthropic.com/careers "engineer" -senior',
-        "location": "Various, US",
-        "role": "Engineer",
-        "ats": "Anthropic",
-        "priority": "high"
-    },
-    {
-        "query": 'site:scale.ai/careers ("machine learning" OR "AI") -senior',
-        "location": "Various, US",
-        "role": "ML/AI",
-        "ats": "Scale AI",
-        "priority": "high"
-    },
-    {
-        "query": 'site:cohere.com/careers "engineer" -senior',
-        "location": "Various, US",
-        "role": "Engineer",
-        "ats": "Cohere",
-        "priority": "medium"
-    },
-    {
-        "query": 'site:huggingface.co/careers ("machine learning" OR "engineer") -senior',
-        "location": "Various, US",
-        "role": "ML Engineer",
-        "ats": "HuggingFace",
-        "priority": "medium"
+        "ats": "Ashby"
     },
 ]
 
 
-# ========================================
-# HELPER FUNCTIONS
-# ========================================
-
 def normalize_url(url):
-    """Normalize URL for better deduplication"""
+    """Normalize URL for deduplication"""
     parsed = urlparse(url)
-
-    # Remove tracking parameters
     query_params = parse_qs(parsed.query)
     clean_params = {k: v for k, v in query_params.items()
                     if not k.startswith('utm_') and k not in ['ref', 'source']}
-
     clean_query = urlencode(clean_params, doseq=True)
 
     normalized = urlunparse((
@@ -259,12 +211,11 @@ def normalize_url(url):
         clean_query,
         ''
     ))
-
     return normalized
 
 
 def load_seen_jobs():
-    """Load previously seen job URLs"""
+    """Load seen jobs"""
     if os.path.exists(SEEN_JOBS_FILE):
         with open(SEEN_JOBS_FILE, 'r') as f:
             return set(json.load(f))
@@ -272,15 +223,13 @@ def load_seen_jobs():
 
 
 def save_seen_jobs(seen_jobs):
-    """Save seen job URLs"""
+    """Save seen jobs"""
     with open(SEEN_JOBS_FILE, 'w') as f:
         json.dump(list(seen_jobs), f)
 
 
 def search_google_with_retry(query, api_key, search_engine_id, date_restrict='d1', max_retries=3):
-    """
-    Execute Google Custom Search API query with exponential backoff on rate limits
-    """
+    """Execute Google API search with retry"""
     base_url = "https://www.googleapis.com/customsearch/v1"
 
     for attempt in range(max_retries):
@@ -296,9 +245,8 @@ def search_google_with_retry(query, api_key, search_engine_id, date_restrict='d1
             response = requests.get(base_url, params=params, timeout=10)
 
             if response.status_code == 429:
-                # Rate limit hit - exponential backoff
-                wait_time = (2 ** attempt) * 5  # 5s, 10s, 20s
-                print(f"   ⏳ Rate limit hit. Waiting {wait_time}s...")
+                wait_time = (2 ** attempt) * 5
+                print(f"   Rate limit hit. Waiting {wait_time}s...")
                 time.sleep(wait_time)
                 continue
 
@@ -308,22 +256,21 @@ def search_google_with_retry(query, api_key, search_engine_id, date_restrict='d1
         except requests.exceptions.HTTPError as e:
             if '429' in str(e):
                 wait_time = (2 ** attempt) * 5
-                print(f"   ⏳ Rate limit. Retry {attempt + 1}/{max_retries} after {wait_time}s")
+                print(f"   Rate limit. Retry {attempt + 1}/{max_retries} after {wait_time}s")
                 time.sleep(wait_time)
             else:
-                print(f"   ❌ HTTP Error: {str(e)[:80]}")
+                print(f"   HTTP Error: {str(e)[:80]}")
                 return None
-
         except requests.exceptions.RequestException as e:
-            print(f"   ❌ Error: {str(e)[:80]}")
+            print(f"   Error: {str(e)[:80]}")
             return None
 
-    print(f"   ❌ Failed after {max_retries} retries (rate limit)")
+    print(f"   Failed after {max_retries} retries")
     return None
 
 
 def extract_company_name(url, title):
-    """Extract company name from URL or title"""
+    """Extract company name"""
     if 'ashbyhq.com' in url:
         parts = url.split('/')
         for i, part in enumerate(parts):
@@ -339,7 +286,7 @@ def extract_company_name(url, title):
 
     if 'lever.co' in url:
         parts = url.split('/')
-        if 'jobs.lever.co' in url and len(parts) > 3:
+        if len(parts) > 3:
             return parts[3].replace('-', ' ').title()
 
     company_map = {
@@ -347,11 +294,6 @@ def extract_company_name(url, title):
         'anthropic.com': 'Anthropic',
         'scale.ai': 'Scale AI',
         'cohere.com': 'Cohere',
-        'nvidia.com': 'NVIDIA',
-        'meta.com': 'Meta',
-        'google.com': 'Google',
-        'amazon.jobs': 'Amazon',
-        'huggingface.co': 'HuggingFace',
     }
 
     for domain, name in company_map.items():
@@ -369,19 +311,41 @@ def extract_company_name(url, title):
 
 
 def parse_job_results(results, metadata):
-    """Parse Google search results into job data"""
+    """Parse results and FILTER OUT senior roles here"""
     jobs = []
 
     if not results or 'items' not in results:
         return jobs
 
+    # Keywords that indicate senior roles (will filter these out)
+    exclude_keywords = [
+        'senior', 'sr.', 'sr ',
+        'staff',
+        'principal',
+        'lead', 'tech lead', 'team lead',
+        'director',
+        'head of',
+        'vp', 'vice president',
+        'chief', 'cto', 'ceo',
+        'manager', 'engineering manager'
+    ]
+
     for item in results['items']:
         url = item.get('link', '')
+        title = item.get('title', 'No Title')
         normalized_url = normalize_url(url)
 
+        # CRITICAL: Filter here (Google ignores -senior in queries)
+        title_lower = title.lower()
+
+        # Check if title contains any exclude keywords
+        if any(keyword in title_lower for keyword in exclude_keywords):
+            print(f"   FILTERED: {title[:60]}")
+            continue  # Skip this job
+
         job = {
-            'title': item.get('title', 'No Title'),
-            'company': extract_company_name(url, item.get('title', '')),
+            'title': title,
+            'company': extract_company_name(url, title),
             'url': url,
             'normalized_url': normalized_url,
             'snippet': item.get('snippet', ''),
@@ -397,7 +361,7 @@ def parse_job_results(results, metadata):
 
 
 def save_to_csv(jobs, filename):
-    """Save jobs to CSV file"""
+    """Save to CSV"""
     if not jobs:
         return
 
@@ -416,16 +380,16 @@ def save_to_csv(jobs, filename):
 
 
 def main():
-    """Main execution function"""
+    """Main execution"""
     print("=" * 60)
-    print("🚀 AI/ML JOB SCRAPER - RATE LIMIT SAFE")
-    print(f"⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"📊 Total Searches: {len(SEARCHES)}")
-    print(f"⚡ Pagination: {'Enabled (30 results)' if ENABLE_PAGINATION else 'Disabled (10 results)'}")
+    print("AI/ML JOB SCRAPER - CORRECTED VERSION")
+    print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Total Searches: {len(SEARCHES)}")
+    print("Filters: Entry to Mid-level ONLY (post-search filtering)")
     print("=" * 60)
 
     if not GOOGLE_API_KEY or not SEARCH_ENGINE_ID:
-        print("❌ ERROR: Missing API keys in .env file")
+        print("ERROR: Missing API keys in .env file")
         return
 
     seen_jobs = load_seen_jobs()
@@ -433,9 +397,8 @@ def main():
     total_searches = len(SEARCHES)
 
     for idx, search_config in enumerate(SEARCHES, 1):
-        priority = search_config.get('priority', 'medium')
         print(
-            f"\n[{idx}/{total_searches}] {priority.upper()} | {search_config['role']} in {search_config['location']} ({search_config['ats']})")
+            f"\n[{idx}/{total_searches}] {search_config['role']} in {search_config['location']} ({search_config['ats']})")
 
         results = search_google_with_retry(
             query=search_config['query'],
@@ -448,11 +411,11 @@ def main():
             new_jobs = [job for job in jobs if job['normalized_url'] not in seen_jobs]
 
             if new_jobs:
-                print(f"   ✨ Found {len(new_jobs)} new jobs")
+                print(f"   Found {len(new_jobs)} new entry/mid-level jobs")
                 all_new_jobs.extend(new_jobs)
                 seen_jobs.update([job['normalized_url'] for job in new_jobs])
             else:
-                print(f"   ℹ️  No new jobs")
+                print(f"   No new jobs")
 
         if idx < total_searches:
             time.sleep(DELAY_BETWEEN_SEARCHES)
@@ -462,14 +425,14 @@ def main():
         save_seen_jobs(seen_jobs)
 
         print("\n" + "=" * 60)
-        print(f"🎉 SUCCESS! Found {len(all_new_jobs)} NEW jobs")
-        print(f"📊 Total unique jobs tracked: {len(seen_jobs)}")
-        print(f"📁 Results: {OUTPUT_FILE}")
+        print(f"SUCCESS! Found {len(all_new_jobs)} NEW entry/mid-level jobs")
+        print(f"Total tracked: {len(seen_jobs)}")
+        print(f"Saved to: {OUTPUT_FILE}")
         print("=" * 60)
     else:
         print("\n" + "=" * 60)
-        print("ℹ️  No new jobs this run")
-        print(f"📊 Total tracked: {len(seen_jobs)}")
+        print("No new jobs this run")
+        print(f"Total tracked: {len(seen_jobs)}")
         print("=" * 60)
 
 
