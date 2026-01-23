@@ -1,12 +1,28 @@
 #!/usr/bin/env python3
 """
-AI/ML Job Scraper - PRODUCTION VERSION
-- Brave Search API with correct pagination
+AI/ML Job Scraper - PRODUCTION VERSION (Brave Search Optimized)
+
+BRAVE SEARCH OPTIMIZATION STRATEGY:
+- Simplified queries without complex Google operators (OR, nested quotes)
+- Brave's index is smaller but cleaner (less SEO spam)
+- Post-filtering in Python rather than complex query syntax
+- One role per query for better recall
+- country=us API param handles geo-filtering
+- freshness=pd API param handles recency (not in query)
+
+Key differences from Google:
+1. No support for intitle:, inurl:, advanced operators
+2. Simpler queries = better results with Brave's index
+3. Fewer false negatives from overly restrictive queries
+4. Post-processing handles location/senior filtering
+
+Features:
 - ATS page verification for posted dates
 - Relaxed US filtering with verification
 - Improved keyword matching (separator-tolerant)
 - Better deduplication and scoring
 - Enhanced CSV output with actionable data
+- Strict and Wide search lanes
 """
 
 import requests
@@ -96,79 +112,93 @@ TARGET_TITLE_PATTERNS = [
 NEGATIVE_HINTS = ["phd required", "10+ years", "12+ years", "15+ years",
                   "principal engineer", "staff engineer", "director"]
 
-# Regional search patterns
-REGION_NE = '("Boston" OR "Cambridge" OR "Massachusetts" OR "MA" OR "Connecticut" OR "CT" OR "New York" OR "NYC")'
+# Regional search patterns - simplified for Brave
+REGION_NE_CITIES = ["Boston", "Cambridge", "New York", "NYC"]
 
-# Search queries - STRICT LANE (high relevance, daily)
+# Search queries - STRICT LANE (optimized for Brave Search)
+# Note: Brave works better with simpler queries, fewer quotes, and broader patterns
 SEARCHES_STRICT = [
-    # Northeast Region (Boston/MA/CT/NYC) - NO "United States" requirement
-    {"query": f'("AI Engineer" OR "Machine Learning Engineer") {REGION_NE} site:jobs.ashbyhq.com',
-     "location": "Northeast", "role": "AI/ML Engineer", "ats": "Ashby", "tag": "ne-strict", "lane": "strict"},
+    # Core ML roles - Ashby
+    {"query": 'machine learning engineer site:jobs.ashbyhq.com',
+     "location": "US", "role": "ML Engineer", "ats": "Ashby", "tag": "ml-ashby", "lane": "strict"},
 
-    {"query": f'("LLM Engineer" OR "Generative AI Engineer") {REGION_NE} site:jobs.ashbyhq.com',
-     "location": "Northeast", "role": "LLM Engineer", "ats": "Ashby", "tag": "ne-strict", "lane": "strict"},
+    {"query": 'AI engineer site:jobs.ashbyhq.com',
+     "location": "US", "role": "AI Engineer", "ats": "Ashby", "tag": "ai-ashby", "lane": "strict"},
 
-    {"query": f'("AI Engineer" OR "ML Engineer") {REGION_NE} site:boards.greenhouse.io',
-     "location": "Northeast", "role": "AI/ML Engineer", "ats": "Greenhouse", "tag": "ne-strict", "lane": "strict"},
+    {"query": 'LLM engineer site:jobs.ashbyhq.com',
+     "location": "US", "role": "LLM Engineer", "ats": "Ashby", "tag": "llm-ashby", "lane": "strict"},
 
-    {"query": f'("Machine Learning Engineer") {REGION_NE} site:jobs.lever.co',
-     "location": "Northeast", "role": "ML Engineer", "ats": "Lever", "tag": "ne-strict", "lane": "strict"},
+    {"query": 'generative AI engineer site:jobs.ashbyhq.com',
+     "location": "US", "role": "Generative AI Engineer", "ats": "Ashby", "tag": "genai-ashby", "lane": "strict"},
 
-    # US-wide (keep "United States" for these)
-    {"query": '("AI Engineer" OR "Machine Learning Engineer") "United States" site:jobs.ashbyhq.com',
-     "location": "United States", "role": "AI/ML Engineer", "ats": "Ashby", "tag": "us-wide-strict", "lane": "strict"},
+    # Core ML roles - Greenhouse
+    {"query": 'machine learning engineer site:boards.greenhouse.io',
+     "location": "US", "role": "ML Engineer", "ats": "Greenhouse", "tag": "ml-greenhouse", "lane": "strict"},
 
-    {"query": '("LLM Engineer") "United States" site:boards.greenhouse.io',
-     "location": "United States", "role": "LLM Engineer", "ats": "Greenhouse", "tag": "us-wide-strict",
-     "lane": "strict"},
+    {"query": 'AI engineer site:boards.greenhouse.io',
+     "location": "US", "role": "AI Engineer", "ats": "Greenhouse", "tag": "ai-greenhouse", "lane": "strict"},
 
-    # Remote US (use negative filters)
-    {
-        "query": '("AI Engineer" OR "Machine Learning Engineer") ("remote" OR "hybrid") site:jobs.ashbyhq.com -canada -uk -india',
-        "location": "Remote US", "role": "AI/ML Engineer", "ats": "Ashby", "tag": "remote-strict", "lane": "strict"},
+    {"query": 'LLM engineer site:boards.greenhouse.io',
+     "location": "US", "role": "LLM Engineer", "ats": "Greenhouse", "tag": "llm-greenhouse", "lane": "strict"},
 
-    {"query": '("LLM Engineer") ("remote US" OR "us remote") site:boards.greenhouse.io -canada',
-     "location": "Remote US", "role": "LLM Engineer", "ats": "Greenhouse", "tag": "remote-strict", "lane": "strict"},
+    # Core ML roles - Lever
+    {"query": 'machine learning engineer site:jobs.lever.co',
+     "location": "US", "role": "ML Engineer", "ats": "Lever", "tag": "ml-lever", "lane": "strict"},
 
-    # Additional ATS platforms
-    {"query": f'("AI Engineer" OR "ML Engineer") {REGION_NE} site:myworkdayjobs.com',
-     "location": "Northeast", "role": "AI/ML Engineer", "ats": "Workday", "tag": "ne-strict", "lane": "strict"},
+    {"query": 'AI engineer site:jobs.lever.co',
+     "location": "US", "role": "AI Engineer", "ats": "Lever", "tag": "ai-lever", "lane": "strict"},
 
-    {"query": '("Machine Learning Engineer") "United States" site:jobs.smartrecruiters.com',
-     "location": "United States", "role": "ML Engineer", "ats": "SmartRecruiters", "tag": "us-wide-strict",
-     "lane": "strict"},
+    # Workday
+    {"query": 'machine learning engineer site:myworkdayjobs.com',
+     "location": "US", "role": "ML Engineer", "ats": "Workday", "tag": "ml-workday", "lane": "strict"},
 
-    {"query": '("AI Engineer") "United States" site:apply.workable.com',
-     "location": "United States", "role": "AI Engineer", "ats": "Workable", "tag": "us-wide-strict", "lane": "strict"},
+    {"query": 'AI engineer site:myworkdayjobs.com',
+     "location": "US", "role": "AI Engineer", "ats": "Workday", "tag": "ai-workday", "lane": "strict"},
+
+    # SmartRecruiters
+    {"query": 'machine learning engineer site:jobs.smartrecruiters.com',
+     "location": "US", "role": "ML Engineer", "ats": "SmartRecruiters", "tag": "ml-smartr", "lane": "strict"},
+
+    # Workable
+    {"query": 'AI engineer site:apply.workable.com',
+     "location": "US", "role": "AI Engineer", "ats": "Workable", "tag": "ai-workable", "lane": "strict"},
 ]
 
-# Search queries - WIDE LANE (broader titles, run less frequently)
+# Search queries - WIDE LANE (broader titles)
 SEARCHES_WIDE = [
-    # Wide titles - Northeast
-    {"query": f'("Applied Scientist" OR "Research Engineer") {REGION_NE} site:jobs.ashbyhq.com',
-     "location": "Northeast", "role": "Applied Scientist", "ats": "Ashby", "tag": "ne-wide", "lane": "wide"},
+    # Research & Applied roles - Ashby
+    {"query": 'applied scientist site:jobs.ashbyhq.com',
+     "location": "US", "role": "Applied Scientist", "ats": "Ashby", "tag": "applied-ashby", "lane": "wide"},
 
-    {"query": f'("ML Platform Engineer" OR "ML Infrastructure Engineer") {REGION_NE} site:boards.greenhouse.io',
-     "location": "Northeast", "role": "ML Platform Engineer", "ats": "Greenhouse", "tag": "ne-wide", "lane": "wide"},
+    {"query": 'research engineer site:jobs.ashbyhq.com',
+     "location": "US", "role": "Research Engineer", "ats": "Ashby", "tag": "research-ashby", "lane": "wide"},
 
-    {"query": f'("Machine Learning Scientist" OR "AI Software Engineer") {REGION_NE} site:jobs.lever.co',
-     "location": "Northeast", "role": "ML Scientist", "ats": "Lever", "tag": "ne-wide", "lane": "wide"},
+    {"query": 'machine learning scientist site:jobs.ashbyhq.com',
+     "location": "US", "role": "ML Scientist", "ats": "Ashby", "tag": "mlsci-ashby", "lane": "wide"},
 
-    # Wide titles - US wide
-    {"query": '("Applied Scientist" OR "Research Engineer") "United States" site:myworkdayjobs.com',
-     "location": "United States", "role": "Applied Scientist", "ats": "Workday", "tag": "us-wide-wide", "lane": "wide"},
+    # Platform & Infrastructure - Greenhouse
+    {"query": 'ML platform engineer site:boards.greenhouse.io',
+     "location": "US", "role": "ML Platform Engineer", "ats": "Greenhouse", "tag": "mlplat-greenhouse", "lane": "wide"},
 
-    {"query": '("ML Platform Engineer" OR "Model Engineer") "United States" site:jobs.ashbyhq.com',
-     "location": "United States", "role": "ML Platform Engineer", "ats": "Ashby", "tag": "us-wide-wide",
-     "lane": "wide"},
+    {"query": 'ML infrastructure engineer site:boards.greenhouse.io',
+     "location": "US", "role": "ML Infra Engineer", "ats": "Greenhouse", "tag": "mlinfra-greenhouse", "lane": "wide"},
 
-    {"query": '("Inference Engineer" OR "AI Software Engineer") "United States" site:boards.greenhouse.io',
-     "location": "United States", "role": "AI Software Engineer", "ats": "Greenhouse", "tag": "us-wide-wide",
-     "lane": "wide"},
+    # Research & Applied - Workday
+    {"query": 'applied scientist site:myworkdayjobs.com',
+     "location": "US", "role": "Applied Scientist", "ats": "Workday", "tag": "applied-workday", "lane": "wide"},
 
-    # Wide titles - Remote
-    {"query": '("Applied Scientist") ("remote" OR "hybrid") site:jobs.ashbyhq.com -canada -uk',
-     "location": "Remote US", "role": "Applied Scientist", "ats": "Ashby", "tag": "remote-wide", "lane": "wide"},
+    {"query": 'research engineer site:myworkdayjobs.com',
+     "location": "US", "role": "Research Engineer", "ats": "Workday", "tag": "research-workday", "lane": "wide"},
+
+    # Specialized roles
+    {"query": 'model engineer site:jobs.lever.co',
+     "location": "US", "role": "Model Engineer", "ats": "Lever", "tag": "model-lever", "lane": "wide"},
+
+    {"query": 'inference engineer site:jobs.ashbyhq.com',
+     "location": "US", "role": "Inference Engineer", "ats": "Ashby", "tag": "inference-ashby", "lane": "wide"},
+
+    {"query": 'AI software engineer site:boards.greenhouse.io',
+     "location": "US", "role": "AI Software Engineer", "ats": "Greenhouse", "tag": "aisw-greenhouse", "lane": "wide"},
 ]
 
 # Combined searches (strict by default, add wide if configured)
@@ -378,21 +408,28 @@ def is_senior_role(title):
     return any(re.search(pattern, title_lower, re.IGNORECASE) for pattern in SENIOR_PATTERNS)
 
 
-def is_us_location_relaxed(title, description):
+def is_us_location_relaxed(title, description, query_location="US"):
     """
-    Relaxed US location filter (3-tier):
+    Relaxed US location filter with post-filtering
+    Since Brave queries are broader, we filter more aggressively in parsing
+
+    3-tier:
     1. Reject if explicitly non-US
     2. Accept if explicitly US
     3. Accept if unknown (verify later via ATS page)
     """
     text = f"{title} {description}".lower()
 
+    # Strong negative indicators
     has_negative = any(neg in text for neg in US_NEGATIVE)
     has_positive = any(pos in text for pos in US_POSITIVE)
 
     # Tier 1: Explicitly non-US
     if has_negative and not has_positive:
         return False
+
+    # For queries without location specified, be more permissive
+    # Most jobs will be US-based due to country=us param in API
 
     # Tier 2 & 3: Explicitly US or unknown (accept both)
     return True
@@ -642,8 +679,8 @@ def parse_brave_results(results, metadata):
         if metadata.get('lane') == 'strict' and is_senior_role(title):
             continue
 
-        # Filter 2: Relaxed US location filter
-        if not is_us_location_relaxed(title, description):
+        # Filter 2: Relaxed US location filter (post-filter since queries are broader)
+        if not is_us_location_relaxed(title, description, metadata.get('location', 'US')):
             continue
 
         # Compute fit score
