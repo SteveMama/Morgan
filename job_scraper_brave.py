@@ -35,12 +35,14 @@ MAX_RESULTS_PER_QUERY = int(os.getenv('MAX_RESULTS_PER_QUERY', '20'))
 VERIFY_JOB_PAGES = os.getenv('VERIFY_JOB_PAGES', 'false').lower() == 'true'
 MAX_HOURS_OLD = int(os.getenv('MAX_HOURS_OLD', '24'))
 FRESHNESS = os.getenv('FRESHNESS', 'pd')  # pd=past day, pw=past week, pm=past month
+ENABLE_WIDE_LANE = os.getenv('ENABLE_WIDE_LANE', 'false').lower() == 'true'
 
 if not BRAVE_API_KEY:
     raise ValueError("Missing BRAVE_API_KEY in .env file")
 
 print(f"Brave API Key: {BRAVE_API_KEY[:10]}...")
 print(f"Freshness filter: {FRESHNESS} (pd=24h, pw=7d, pm=30d)")
+print(f"Wide lane enabled: {ENABLE_WIDE_LANE}")
 print(f"Verify job pages: {VERIFY_JOB_PAGES}")
 print(f"Max hours old: {MAX_HOURS_OLD}")
 
@@ -94,46 +96,88 @@ TARGET_TITLE_PATTERNS = [
 NEGATIVE_HINTS = ["phd required", "10+ years", "12+ years", "15+ years",
                   "principal engineer", "staff engineer", "director"]
 
-# Search queries
-SEARCHES = [
-    # US-wide
-    {"query": '("AI Engineer" OR "Machine Learning Engineer") "United States" site:ashbyhq.com',
-     "location": "United States", "role": "AI/ML Engineer", "ats": "Ashby", "tag": "us-wide"},
+# Regional search patterns
+REGION_NE = '("Boston" OR "Cambridge" OR "Massachusetts" OR "MA" OR "Connecticut" OR "CT" OR "New York" OR "NYC")'
 
-    {"query": '("AI Engineer" OR "ML Engineer") "United States" site:greenhouse.io',
-     "location": "United States", "role": "AI/ML Engineer", "ats": "Greenhouse", "tag": "us-wide"},
+# Search queries - STRICT LANE (high relevance, daily)
+SEARCHES_STRICT = [
+    # Northeast Region (Boston/MA/CT/NYC) - NO "United States" requirement
+    {"query": f'("AI Engineer" OR "Machine Learning Engineer") {REGION_NE} site:jobs.ashbyhq.com',
+     "location": "Northeast", "role": "AI/ML Engineer", "ats": "Ashby", "tag": "ne-strict", "lane": "strict"},
 
-    {"query": '("LLM Engineer" OR "Generative AI Engineer") "United States" site:ashbyhq.com',
-     "location": "United States", "role": "LLM Engineer", "ats": "Ashby", "tag": "us-wide"},
+    {"query": f'("LLM Engineer" OR "Generative AI Engineer") {REGION_NE} site:jobs.ashbyhq.com',
+     "location": "Northeast", "role": "LLM Engineer", "ats": "Ashby", "tag": "ne-strict", "lane": "strict"},
 
-    # NYC
-    {"query": '("AI Engineer" OR "Machine Learning Engineer") ("New York" OR "NYC") site:ashbyhq.com',
-     "location": "NYC", "role": "AI/ML Engineer", "ats": "Ashby", "tag": "nyc"},
+    {"query": f'("AI Engineer" OR "ML Engineer") {REGION_NE} site:boards.greenhouse.io',
+     "location": "Northeast", "role": "AI/ML Engineer", "ats": "Greenhouse", "tag": "ne-strict", "lane": "strict"},
 
-    {"query": '("LLM Engineer") ("New York" OR "NYC") site:ashbyhq.com',
-     "location": "NYC", "role": "LLM Engineer", "ats": "Ashby", "tag": "nyc"},
+    {"query": f'("Machine Learning Engineer") {REGION_NE} site:jobs.lever.co',
+     "location": "Northeast", "role": "ML Engineer", "ats": "Lever", "tag": "ne-strict", "lane": "strict"},
 
-    # SF/Bay Area
-    {"query": '("AI Engineer" OR "Machine Learning Engineer") ("San Francisco" OR "Bay Area") site:ashbyhq.com',
-     "location": "SF/Bay Area", "role": "AI/ML Engineer", "ats": "Ashby", "tag": "sf-bay"},
+    # US-wide (keep "United States" for these)
+    {"query": '("AI Engineer" OR "Machine Learning Engineer") "United States" site:jobs.ashbyhq.com',
+     "location": "United States", "role": "AI/ML Engineer", "ats": "Ashby", "tag": "us-wide-strict", "lane": "strict"},
 
-    {"query": '("LLM Engineer") ("San Francisco") site:ashbyhq.com',
-     "location": "SF/Bay Area", "role": "LLM Engineer", "ats": "Ashby", "tag": "sf-bay"},
+    {"query": '("LLM Engineer") "United States" site:boards.greenhouse.io',
+     "location": "United States", "role": "LLM Engineer", "ats": "Greenhouse", "tag": "us-wide-strict",
+     "lane": "strict"},
 
-    # Boston
-    {"query": '("AI Engineer" OR "Machine Learning Engineer") ("Boston" OR "Cambridge") site:ashbyhq.com',
-     "location": "Boston", "role": "AI/ML Engineer", "ats": "Ashby", "tag": "boston"},
+    # Remote US (use negative filters)
+    {
+        "query": '("AI Engineer" OR "Machine Learning Engineer") ("remote" OR "hybrid") site:jobs.ashbyhq.com -canada -uk -india',
+        "location": "Remote US", "role": "AI/ML Engineer", "ats": "Ashby", "tag": "remote-strict", "lane": "strict"},
 
-    {"query": '("ML Engineer") ("Boston" OR "Cambridge") site:greenhouse.io',
-     "location": "Boston", "role": "ML Engineer", "ats": "Greenhouse", "tag": "boston"},
+    {"query": '("LLM Engineer") ("remote US" OR "us remote") site:boards.greenhouse.io -canada',
+     "location": "Remote US", "role": "LLM Engineer", "ats": "Greenhouse", "tag": "remote-strict", "lane": "strict"},
 
-    # Remote
-    {"query": '("AI Engineer" OR "Machine Learning Engineer") ("remote" OR "hybrid") site:ashbyhq.com -canada -uk',
-     "location": "Remote US", "role": "AI/ML Engineer", "ats": "Ashby", "tag": "remote"},
+    # Additional ATS platforms
+    {"query": f'("AI Engineer" OR "ML Engineer") {REGION_NE} site:myworkdayjobs.com',
+     "location": "Northeast", "role": "AI/ML Engineer", "ats": "Workday", "tag": "ne-strict", "lane": "strict"},
 
-    {"query": '("LLM Engineer") ("remote") site:ashbyhq.com -canada',
-     "location": "Remote US", "role": "LLM Engineer", "ats": "Ashby", "tag": "remote"},
+    {"query": '("Machine Learning Engineer") "United States" site:jobs.smartrecruiters.com',
+     "location": "United States", "role": "ML Engineer", "ats": "SmartRecruiters", "tag": "us-wide-strict",
+     "lane": "strict"},
+
+    {"query": '("AI Engineer") "United States" site:apply.workable.com',
+     "location": "United States", "role": "AI Engineer", "ats": "Workable", "tag": "us-wide-strict", "lane": "strict"},
 ]
+
+# Search queries - WIDE LANE (broader titles, run less frequently)
+SEARCHES_WIDE = [
+    # Wide titles - Northeast
+    {"query": f'("Applied Scientist" OR "Research Engineer") {REGION_NE} site:jobs.ashbyhq.com',
+     "location": "Northeast", "role": "Applied Scientist", "ats": "Ashby", "tag": "ne-wide", "lane": "wide"},
+
+    {"query": f'("ML Platform Engineer" OR "ML Infrastructure Engineer") {REGION_NE} site:boards.greenhouse.io',
+     "location": "Northeast", "role": "ML Platform Engineer", "ats": "Greenhouse", "tag": "ne-wide", "lane": "wide"},
+
+    {"query": f'("Machine Learning Scientist" OR "AI Software Engineer") {REGION_NE} site:jobs.lever.co',
+     "location": "Northeast", "role": "ML Scientist", "ats": "Lever", "tag": "ne-wide", "lane": "wide"},
+
+    # Wide titles - US wide
+    {"query": '("Applied Scientist" OR "Research Engineer") "United States" site:myworkdayjobs.com',
+     "location": "United States", "role": "Applied Scientist", "ats": "Workday", "tag": "us-wide-wide", "lane": "wide"},
+
+    {"query": '("ML Platform Engineer" OR "Model Engineer") "United States" site:jobs.ashbyhq.com',
+     "location": "United States", "role": "ML Platform Engineer", "ats": "Ashby", "tag": "us-wide-wide",
+     "lane": "wide"},
+
+    {"query": '("Inference Engineer" OR "AI Software Engineer") "United States" site:boards.greenhouse.io',
+     "location": "United States", "role": "AI Software Engineer", "ats": "Greenhouse", "tag": "us-wide-wide",
+     "lane": "wide"},
+
+    # Wide titles - Remote
+    {"query": '("Applied Scientist") ("remote" OR "hybrid") site:jobs.ashbyhq.com -canada -uk',
+     "location": "Remote US", "role": "Applied Scientist", "ats": "Ashby", "tag": "remote-wide", "lane": "wide"},
+]
+
+# Combined searches (strict by default, add wide if configured)
+if ENABLE_WIDE_LANE:
+    SEARCHES = SEARCHES_STRICT + SEARCHES_WIDE
+    print(f"Total searches: {len(SEARCHES)} (strict + wide lanes)")
+else:
+    SEARCHES = SEARCHES_STRICT
+    print(f"Total searches: {len(SEARCHES)} (strict lane only)")
 
 
 def normalize_url(url):
@@ -164,10 +208,17 @@ def normalize_url(url):
 
 def extract_job_id(url):
     """Extract unique job ID from ATS URLs"""
-    if 'greenhouse.io' in url:
+    # Greenhouse: handle both /jobs/ID and ?gh_jid=ID formats
+    if 'greenhouse' in url.lower():
         match = re.search(r'/jobs/(\d+)', url)
         if match:
             return f"greenhouse_{match.group(1)}"
+
+        # Fallback: check query parameter
+        parsed = urlparse(url)
+        qs = parse_qs(parsed.query)
+        if 'gh_jid' in qs and qs['gh_jid']:
+            return f"greenhouse_{qs['gh_jid'][0]}"
 
     if 'ashbyhq.com' in url:
         match = re.search(r'/([a-f0-9\-]{36})', url)
@@ -179,10 +230,20 @@ def extract_job_id(url):
         if match:
             return f"lever_{match.group(1)}"
 
-    if 'myworkdayjobs.com' in url:
+    if 'myworkdayjobs.com' in url or 'workday' in url.lower():
         match = re.search(r'/job/[^/]+/([^/]+)', url)
         if match:
             return f"workday_{match.group(1)}"
+
+    if 'smartrecruiters' in url.lower():
+        match = re.search(r'/jobs/(\d+)', url)
+        if match:
+            return f"smartrecruiters_{match.group(1)}"
+
+    if 'workable' in url.lower():
+        match = re.search(r'/j/([A-Z0-9]+)', url)
+        if match:
+            return f"workable_{match.group(1)}"
 
     return normalize_url(url)
 
@@ -192,14 +253,24 @@ def detect_ats(url):
     url_lower = url.lower()
     if 'ashbyhq.com' in url_lower:
         return 'Ashby'
-    elif 'greenhouse.io' in url_lower:
+    elif 'greenhouse' in url_lower:  # Catches both greenhouse.io and boards.greenhouse.io
         return 'Greenhouse'
     elif 'lever.co' in url_lower:
         return 'Lever'
-    elif 'myworkdayjobs.com' in url_lower:
+    elif 'workday' in url_lower or 'myworkdayjobs' in url_lower:
         return 'Workday'
     elif 'icims.com' in url_lower:
         return 'iCIMS'
+    elif 'smartrecruiters' in url_lower:
+        return 'SmartRecruiters'
+    elif 'workable' in url_lower:
+        return 'Workable'
+    elif 'jobvite' in url_lower:
+        return 'Jobvite'
+    elif 'pinpointhq' in url_lower:
+        return 'Pinpoint'
+    elif 'bamboohr' in url_lower:
+        return 'BambooHR'
     else:
         return 'Other'
 
@@ -361,8 +432,13 @@ def compute_fit_score(title, description):
         score += 30
         reasons.append("target_title")
     else:
-        # If no title match, require at least some ML keywords
-        has_ml_keywords = any(kw in text for kw in ["machine learning", "ml", "ai", "llm"])
+        # If no title match, require at least some ML keywords with word boundaries
+        has_ml_keywords = (
+                "machine learning" in text
+                or re.search(r'\bml\b', text)
+                or re.search(r'\bai\b', text)
+                or re.search(r'\bllm\b', text)
+        )
         if not has_ml_keywords:
             return 0, "no_ml_content", ""
 
@@ -453,19 +529,39 @@ def verify_ats_job_page(url):
             'remote_status': None
         }
 
-        # Ashby-specific parsing
+        # Try generic JSON-LD JobPosting first (works across many ATS)
+        scripts = soup.find_all('script', type='application/ld+json')
+        for script in scripts:
+            try:
+                data = json.loads(script.string)
+                if isinstance(data, dict) and data.get('@type') == 'JobPosting':
+                    result['posted_at'] = data.get('datePosted')
+
+                    # Location can be nested differently
+                    job_location = data.get('jobLocation', {})
+                    if isinstance(job_location, dict):
+                        address = job_location.get('address', {})
+                        if isinstance(address, dict):
+                            result['location'] = address.get('addressLocality') or address.get('addressRegion')
+
+                    result['employment_type'] = data.get('employmentType')
+
+                    # If we got posted_at, we can return early
+                    if result['posted_at']:
+                        # Still check for remote status in page text
+                        page_text = soup.get_text().lower()
+                        if 'remote' in page_text or 'work from home' in page_text:
+                            result['remote_status'] = 'hybrid' if 'hybrid' in page_text else 'remote'
+                        else:
+                            result['remote_status'] = 'on-site'
+                        return result
+            except:
+                pass
+
+        # Ashby-specific parsing (if JSON-LD didn't work)
         if ats_type == 'Ashby':
-            # Ashby often embeds JSON in script tags
-            scripts = soup.find_all('script', type='application/ld+json')
-            for script in scripts:
-                try:
-                    data = json.loads(script.string)
-                    if '@type' in data and data['@type'] == 'JobPosting':
-                        result['posted_at'] = data.get('datePosted')
-                        result['location'] = data.get('jobLocation', {}).get('address', {}).get('addressLocality')
-                        result['employment_type'] = data.get('employmentType')
-                except:
-                    pass
+            # Ashby usually has good JSON-LD, but fallback if needed
+            pass
 
         # Greenhouse-specific parsing
         elif ats_type == 'Greenhouse':
@@ -479,7 +575,38 @@ def verify_ats_job_page(url):
             if location_div:
                 result['location'] = location_div.text.strip()
 
-        # Parse text for remote status
+        # Lever-specific parsing
+        elif ats_type == 'Lever':
+            # Lever often has posting info in specific divs
+            posting_meta = soup.find('div', class_='posting-categories')
+            if posting_meta:
+                location_elem = posting_meta.find('div', class_='location')
+                if location_elem:
+                    result['location'] = location_elem.text.strip()
+
+            # Look for time tags
+            time_tag = soup.find('time')
+            if time_tag:
+                result['posted_at'] = time_tag.get('datetime')
+
+        # Workday-specific parsing
+        elif ats_type == 'Workday':
+            # Workday often includes date in specific elements
+            date_elem = soup.find('span', class_='css-1ez8oav')  # Common Workday class
+            if date_elem:
+                # Parse relative dates like "Posted 2 days ago"
+                date_text = date_elem.text.lower()
+                if 'today' in date_text or '0 day' in date_text:
+                    result['posted_at'] = datetime.now().isoformat()
+                elif 'yesterday' in date_text or '1 day' in date_text:
+                    result['posted_at'] = (datetime.now() - timedelta(days=1)).isoformat()
+                elif 'days ago' in date_text:
+                    days_match = re.search(r'(\d+)\s+days?\s+ago', date_text)
+                    if days_match:
+                        days = int(days_match.group(1))
+                        result['posted_at'] = (datetime.now() - timedelta(days=days)).isoformat()
+
+        # Parse text for remote status (applies to all ATS)
         page_text = soup.get_text().lower()
         if 'remote' in page_text or 'work from home' in page_text:
             if 'hybrid' in page_text:
@@ -507,8 +634,12 @@ def parse_brave_results(results, metadata):
         # Detect actual ATS from URL (not from query metadata)
         actual_ats = detect_ats(url)
 
-        # Filter 1: Senior roles (with entry-level exceptions)
-        if is_senior_role(title):
+        # Extract company domain
+        parsed_url = urlparse(url)
+        company_domain = parsed_url.netloc
+
+        # Filter 1: Senior roles (with entry-level exceptions) - only for strict lane
+        if metadata.get('lane') == 'strict' and is_senior_role(title):
             continue
 
         # Filter 2: Relaxed US location filter
@@ -524,25 +655,34 @@ def parse_brave_results(results, metadata):
 
         job_id = extract_job_id(url)
 
+        # Guess remote status from snippet
+        snippet_lower = description.lower()
+        is_remote_guess = 'remote' in snippet_lower or 'work from home' in snippet_lower
+
         job = {
             'title': title,
             'company': extract_company_name(url, title),
+            'company_domain': company_domain,
             'url': url,
             'job_id': job_id,
             'snippet': description[:200],
             'location': metadata['location'],
             'role_category': metadata['role'],
-            'ats': actual_ats,  # Use detected ATS, not query metadata
+            'ats': actual_ats,
             'query_tag': metadata['tag'],
+            'query_used': metadata['query'][:80],
+            'lane': metadata.get('lane', 'strict'),
             'fit_score': fit_score,
             'fit_reasons': fit_reasons,
             'keywords_matched': keywords_matched,
+            'is_remote_guess': is_remote_guess,
             'date_found': datetime.now().strftime('%Y-%m-%d %H:%M'),
             'posted_at': None,
             'hours_old': None,
             'employment_type': None,
             'remote_status': None,
             'verified_location': None,
+            'apply_priority': None,
             'status': 'Not Applied'
         }
         jobs.append(job)
@@ -612,6 +752,37 @@ def filter_by_posted_date(jobs, max_hours=48):
     return recent_jobs
 
 
+def calculate_apply_priority(job):
+    """
+    Calculate apply priority (A/B/C) based on fit_score, hours_old, and ATS
+    A = High priority (apply today)
+    B = Medium priority (apply this week)
+    C = Lower priority (apply if time permits)
+    """
+    score = job['fit_score']
+    hours = job['hours_old'] or 999
+    ats = job['ats']
+
+    # Priority ATS platforms (faster to apply)
+    fast_ats = ['Ashby', 'Greenhouse', 'Lever']
+
+    # A priority: high score, recent, easy to apply
+    if score >= 60 and hours <= 24 and ats in fast_ats:
+        return 'A'
+    elif score >= 55 and hours <= 48:
+        return 'A'
+
+    # B priority: decent score, reasonably recent
+    elif score >= 50 and hours <= 72:
+        return 'B'
+    elif score >= 45 and hours <= 48:
+        return 'B'
+
+    # C priority: everything else that passed filters
+    else:
+        return 'C'
+
+
 def save_to_csv(jobs, filename):
     """Save jobs to CSV with enhanced columns"""
     if not jobs:
@@ -620,9 +791,10 @@ def save_to_csv(jobs, filename):
     file_exists = os.path.exists(filename)
 
     fieldnames = [
-        'fit_score', 'hours_old', 'title', 'company', 'location', 'verified_location',
-        'remote_status', 'employment_type', 'role_category', 'ats', 'query_tag',
-        'keywords_matched', 'fit_reasons', 'url', 'posted_at', 'date_found', 'status', 'snippet'
+        'apply_priority', 'fit_score', 'hours_old', 'title', 'company', 'company_domain',
+        'location', 'verified_location', 'is_remote_guess', 'remote_status', 'employment_type',
+        'role_category', 'ats', 'query_tag', 'lane', 'keywords_matched', 'fit_reasons',
+        'url', 'posted_at', 'date_found', 'status', 'query_used', 'snippet'
     ]
 
     with open(filename, 'a', newline='', encoding='utf-8') as f:
@@ -632,22 +804,28 @@ def save_to_csv(jobs, filename):
             writer.writeheader()
 
         for job in jobs:
+            # Calculate apply priority before writing
+            job['apply_priority'] = calculate_apply_priority(job)
             row = {k: job.get(k, '') for k in fieldnames}
             writer.writerow(row)
 
 
-def save_top_jobs(jobs, filename, limit=10):
-    """Save top N jobs to separate file for quick review"""
+def save_top_jobs(jobs, base_filename, limit=10):
+    """Save top N jobs to separate file for quick review with date in filename"""
     if not jobs:
         return
+
+    # Add date to filename
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    filename = base_filename.replace('.csv', f'_{date_str}.csv')
 
     # Sort by fit score, then by hours_old (newer first)
     sorted_jobs = sorted(jobs, key=lambda x: (x['fit_score'], -(x['hours_old'] or 999)), reverse=True)
     top_jobs = sorted_jobs[:limit]
 
     fieldnames = [
-        'fit_score', 'hours_old', 'title', 'company', 'location', 'remote_status',
-        'url', 'posted_at', 'keywords_matched'
+        'apply_priority', 'fit_score', 'hours_old', 'title', 'company', 'location',
+        'is_remote_guess', 'remote_status', 'url', 'posted_at', 'keywords_matched', 'ats'
     ]
 
     with open(filename, 'w', newline='', encoding='utf-8') as f:
@@ -655,8 +833,11 @@ def save_top_jobs(jobs, filename, limit=10):
         writer.writeheader()
 
         for job in top_jobs:
+            job['apply_priority'] = calculate_apply_priority(job)
             row = {k: job.get(k, '') for k in fieldnames}
             writer.writerow(row)
+
+    return filename
 
 
 def main():
@@ -713,21 +894,23 @@ def main():
 
     if all_new_jobs:
         save_to_csv(all_new_jobs, OUTPUT_FILE)
-        save_top_jobs(all_new_jobs, TOP_JOBS_FILE, limit=10)
+        top_file = save_top_jobs(all_new_jobs, TOP_JOBS_FILE, limit=10)
         save_seen_jobs(seen_jobs)
 
         print("\n" + "=" * 70)
         print(f"SUCCESS: Found {len(all_new_jobs)} high-fit jobs")
         print(f"Top score: {all_new_jobs[0]['fit_score']}")
         print(f"Saved to: {OUTPUT_FILE}")
-        print(f"Top 10 saved to: {TOP_JOBS_FILE}")
+        if top_file:
+            print(f"Top 10 saved to: {top_file}")
         print("=" * 70)
 
         # Print top 5 for quick review
         print("\nTOP 5 JOBS:")
         for i, job in enumerate(all_new_jobs[:5], 1):
             hours = f"{job['hours_old']}h" if job['hours_old'] else "?"
-            print(f"{i}. [{job['fit_score']}] {job['title']} at {job['company']} ({hours} old)")
+            priority = calculate_apply_priority(job)
+            print(f"{i}. [{priority}] [{job['fit_score']}] {job['title']} at {job['company']} ({hours} old)")
             print(f"   {job['url']}")
     else:
         print("\n" + "=" * 70)
