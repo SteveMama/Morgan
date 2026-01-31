@@ -1,0 +1,11 @@
+# Output directory for separate CSV files by role category
+OUTPUT_DIR=gmp_jobs_output
+
+# Time window: Jobs posted in last N hours
+HOURS_LOOKBACK=48
+
+# Delay between searches (minimum 5 seconds to avoid Google blocking)
+DELAY_BETWEEN_SEARCHES=5
+
+# Maximum results per search query
+MAX_RESULTS_PER_QUERY=20

@@ -1,838 +1,366 @@
 #!/usr/bin/env python3
 """
-AI/ML Job Scraper - PRODUCTION VERSION (Brave Search Optimized)
+GMP QA & Document Control Job Scraper - BRAVE BROWSER + GOOGLE SEARCH
+Uses Selenium with Brave browser to scrape Google search results
 
-BRAVE SEARCH OPTIMIZATION STRATEGY:
-- Simplified queries without complex Google operators (OR, nested quotes)
-- Brave's index is smaller but cleaner (less SEO spam)
-- Post-filtering in Python rather than complex query syntax
-- One role per query for better recall
-- country=us API param handles geo-filtering
-- freshness=pd API param handles recency (not in query)
+Searches for:
+- GMP QA Associate
+- GMP Specialist
+- GMP Document Control Specialist/Associate
+- Quality Assurance Associate (GMP)
+- Quality Control Associate (GMP)
 
-Key differences from Google:
-1. No support for intitle:, inurl:, advanced operators
-2. Simpler queries = better results with Brave's index
-3. Fewer false negatives from overly restrictive queries
-4. Post-processing handles location/senior filtering
+Requirements:
+- Brave browser installed
+- selenium
+- chromedriver (brew install chromedriver on Mac)
 
-Features:
-- ATS page verification for posted dates
-- Relaxed US filtering with verification
-- Improved keyword matching (separator-tolerant)
-- Better deduplication and scoring
-- Enhanced CSV output with actionable data
-- Strict and Wide search lanes
+Install:
+pip install selenium python-dotenv
 """
 
-import requests
-import csv
 import time
-from datetime import datetime, timedelta
-import json
-import os
+import csv
 import re
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+import os
+from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 
-# Load environment variables
 load_dotenv(Path(__file__).with_name(".env"), override=True)
 
 # Configuration
-BRAVE_API_KEY = os.getenv('BRAVE_API_KEY', '').strip()
-OUTPUT_FILE = os.getenv('OUTPUT_FILE', 'ai_ml_jobs.csv')
-TOP_JOBS_FILE = 'ai_ml_jobs_top10_today.csv'
-SEEN_JOBS_FILE = os.getenv('SEEN_JOBS_FILE', 'seen_jobs.json')
-DELAY_BETWEEN_SEARCHES = float(os.getenv('DELAY_BETWEEN_SEARCHES', '1'))
-MAX_RESULTS_PER_QUERY = int(os.getenv('MAX_RESULTS_PER_QUERY', '20'))
-VERIFY_JOB_PAGES = os.getenv('VERIFY_JOB_PAGES', 'false').lower() == 'true'
-MAX_HOURS_OLD = int(os.getenv('MAX_HOURS_OLD', '24'))
-FRESHNESS = os.getenv('FRESHNESS', 'pd')  # pd=past day, pw=past week, pm=past month
-ENABLE_WIDE_LANE = os.getenv('ENABLE_WIDE_LANE', 'false').lower() == 'true'
+OUTPUT_FILE = os.getenv('OUTPUT_FILE', 'gmp_qa_jobs_google.csv')
+DELAY_BETWEEN_SEARCHES = int(os.getenv('DELAY_BETWEEN_SEARCHES', 5))  # Minimum 5 seconds
+MAX_RESULTS_PER_QUERY = int(os.getenv('MAX_RESULTS_PER_QUERY', 20))
+HOURS_LOOKBACK = int(os.getenv('HOURS_LOOKBACK', 48))  # Default: last 48 hours
 
-if not BRAVE_API_KEY:
-    raise ValueError("Missing BRAVE_API_KEY in .env file")
+# Calculate date for Google search filter (48 hours ago)
+now = datetime.now()
+lookback_date = now - timedelta(hours=HOURS_LOOKBACK)
+date_filter = lookback_date.strftime('%Y-%m-%d')  # Format: YYYY-MM-DD
 
-print(f"Brave API Key: {BRAVE_API_KEY[:10]}...")
-print(f"Freshness filter: {FRESHNESS} (pd=24h, pw=7d, pm=30d)")
-print(f"Wide lane enabled: {ENABLE_WIDE_LANE}")
-print(f"Verify job pages: {VERIFY_JOB_PAGES}")
-print(f"Max hours old: {MAX_HOURS_OLD}")
+print(f"Current time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"Looking back {HOURS_LOOKBACK} hours to: {lookback_date.strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"Google date filter: after:{date_filter}")
 
-# Resume keyword categories
-KEYWORDS_LLM = ["llm", "generative ai", "rag", "retrieval augmented", "agent", "agentic",
-                "langchain", "bedrock", "faiss", "pinecone", "chroma", "vector database",
-                "embedding", "prompt engineering"]
-
-KEYWORDS_CV = ["computer vision", "vision", "multimodal", "clip", "openclip", "grad-cam",
-               "resnet", "efficientnet", "semantic search", "image classification",
-               "object detection", "segmentation"]
-
-KEYWORDS_MLOPS = ["aws", "ecs", "eks", "docker", "kubernetes", "fastapi", "onnx",
-                  "quantization", "ci/cd", "github actions", "mlops", "ml infrastructure",
-                  "terraform", "cloudformation"]
-
-# Location filters
-US_NEGATIVE = ["canada", "uk", "london", "europe", "india", "singapore", "australia",
-               "bangalore", "toronto", "berlin", "paris", "tokyo", "remote - eu", "remote eu"]
-
-US_POSITIVE = ["united states", "u.s.", "usa", "massachusetts", "boston", "cambridge",
-               "new york", "nyc", "california", "san francisco", "seattle", "austin",
-               "remote (us", "remote - us", "remote us", "us only", "us-remote"]
-
-# Senior role patterns
+# Senior role patterns for GMP/QA roles
 SENIOR_PATTERNS = [
-    r'\b(senior|sr\.?)\b',
-    r'\b(staff|principal|director)\b',
-    r'\b(vp|vice president|head of|chief)\b',
-    r'\b(engineering manager)\b'
+    r'\bsenior\b',
+    r'\bsr\.?\b',
+    r'\b(manager|supervisor|lead)\b',
+    r'\b(director|head of|chief)\b',
+    r'\bprincipal\b'
 ]
 
-# Entry-level hints (exceptions to senior filter)
-ENTRY_HINTS = ["new grad", "new graduate", "intern", "entry level", "junior", "associate"]
+# Entry-level/associate hints (keep these)
+ENTRY_HINTS = ["associate", "entry level", "junior", "I", " i ", "level 1"]
 
-# Target title patterns
-TARGET_TITLE_PATTERNS = [
-    r'\bai engineer\b',
-    r'\bmachine learning engineer\b',
-    r'\bml engineer\b',
-    r'\bllm engineer\b',
-    r'\bgenerative ai\b',
-    r'\bapplied scientist\b',
-    r'\bresearch scientist\b',
-    r'\bdata scientist\b',
-    r'\bcomputer vision\b',
-    r'\bmlops engineer\b'
+# Search queries - GMP QA and Document Control roles
+SEARCHES = [
+    # GMP QA Associate - Major pharma ATS
+    {"query": 'GMP QA Associate site:myworkdayjobs.com',
+     "role": "GMP QA Associate", "ats": "Workday"},
+
+    {"query": 'GMP Quality Assurance Associate site:myworkdayjobs.com',
+     "role": "GMP QA Associate", "ats": "Workday"},
+
+    {"query": 'GMP QA Associate site:icims.com',
+     "role": "GMP QA Associate", "ats": "iCIMS"},
+
+    # GMP Specialist
+    {"query": 'GMP specialist site:myworkdayjobs.com',
+     "role": "GMP Specialist", "ats": "Workday"},
+
+    {"query": 'GMP Quality specialist site:icims.com',
+     "role": "GMP Specialist", "ats": "iCIMS"},
+
+    {"query": 'GMP compliance specialist site:myworkdayjobs.com',
+     "role": "GMP Specialist", "ats": "Workday"},
+
+    # Document Control Specialist
+    {"query": 'GMP document control specialist site:myworkdayjobs.com',
+     "role": "Document Control Specialist", "ats": "Workday"},
+
+    {"query": 'document control specialist associate site:myworkdayjobs.com',
+     "role": "Document Control Associate", "ats": "Workday"},
+
+    {"query": 'GMP document control site:icims.com',
+     "role": "Document Control Specialist", "ats": "iCIMS"},
+
+    # General QA roles
+    {"query": 'quality assurance associate GMP site:myworkdayjobs.com',
+     "role": "QA Associate", "ats": "Workday"},
+
+    {"query": 'quality control associate GMP site:myworkdayjobs.com',
+     "role": "QC Associate", "ats": "Workday"},
+
+    # Greenhouse and Lever (biotech companies often use these)
+    {"query": 'GMP QA Associate site:boards.greenhouse.io',
+     "role": "GMP QA Associate", "ats": "Greenhouse"},
+
+    {"query": 'document control specialist site:boards.greenhouse.io',
+     "role": "Document Control Specialist", "ats": "Greenhouse"},
+
+    {"query": 'GMP specialist site:jobs.lever.co',
+     "role": "GMP Specialist", "ats": "Lever"},
+
+    {"query": 'QA associate GMP site:jobs.lever.co',
+     "role": "QA Associate", "ats": "Lever"},
 ]
 
-# Negative hints in description (reduce false positives)
-NEGATIVE_HINTS = ["phd required", "10+ years", "12+ years", "15+ years",
-                  "principal engineer", "staff engineer", "director"]
 
-# Regional search patterns - simplified for Brave
-REGION_NE_CITIES = ["Boston", "Cambridge", "New York", "NYC"]
+def setup_brave_driver():
+    """Setup Selenium with Brave browser"""
 
-# Search queries - STRICT LANE (optimized for Brave Search)
-# Note: Brave works better with simpler queries, fewer quotes, and broader patterns
-SEARCHES_STRICT = [
-    # Core ML roles - Ashby
-    {"query": 'machine learning engineer site:jobs.ashbyhq.com',
-     "location": "US", "role": "ML Engineer", "ats": "Ashby", "tag": "ml-ashby", "lane": "strict"},
+    # Brave browser executable paths (common locations)
+    brave_paths = [
+        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",  # macOS
+        "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",  # Windows
+        "/usr/bin/brave-browser",  # Linux
+        "/snap/bin/brave",  # Linux Snap
+    ]
 
-    {"query": 'AI engineer site:jobs.ashbyhq.com',
-     "location": "US", "role": "AI Engineer", "ats": "Ashby", "tag": "ai-ashby", "lane": "strict"},
-
-    {"query": 'LLM engineer site:jobs.ashbyhq.com',
-     "location": "US", "role": "LLM Engineer", "ats": "Ashby", "tag": "llm-ashby", "lane": "strict"},
-
-    {"query": 'generative AI engineer site:jobs.ashbyhq.com',
-     "location": "US", "role": "Generative AI Engineer", "ats": "Ashby", "tag": "genai-ashby", "lane": "strict"},
-
-    # Core ML roles - Greenhouse
-    {"query": 'machine learning engineer site:boards.greenhouse.io',
-     "location": "US", "role": "ML Engineer", "ats": "Greenhouse", "tag": "ml-greenhouse", "lane": "strict"},
-
-    {"query": 'AI engineer site:boards.greenhouse.io',
-     "location": "US", "role": "AI Engineer", "ats": "Greenhouse", "tag": "ai-greenhouse", "lane": "strict"},
-
-    {"query": 'LLM engineer site:boards.greenhouse.io',
-     "location": "US", "role": "LLM Engineer", "ats": "Greenhouse", "tag": "llm-greenhouse", "lane": "strict"},
-
-    # Core ML roles - Lever
-    {"query": 'machine learning engineer site:jobs.lever.co',
-     "location": "US", "role": "ML Engineer", "ats": "Lever", "tag": "ml-lever", "lane": "strict"},
-
-    {"query": 'AI engineer site:jobs.lever.co',
-     "location": "US", "role": "AI Engineer", "ats": "Lever", "tag": "ai-lever", "lane": "strict"},
-
-    # Workday
-    {"query": 'machine learning engineer site:myworkdayjobs.com',
-     "location": "US", "role": "ML Engineer", "ats": "Workday", "tag": "ml-workday", "lane": "strict"},
-
-    {"query": 'AI engineer site:myworkdayjobs.com',
-     "location": "US", "role": "AI Engineer", "ats": "Workday", "tag": "ai-workday", "lane": "strict"},
-
-    # SmartRecruiters
-    {"query": 'machine learning engineer site:jobs.smartrecruiters.com',
-     "location": "US", "role": "ML Engineer", "ats": "SmartRecruiters", "tag": "ml-smartr", "lane": "strict"},
-
-    # Workable
-    {"query": 'AI engineer site:apply.workable.com',
-     "location": "US", "role": "AI Engineer", "ats": "Workable", "tag": "ai-workable", "lane": "strict"},
-]
-
-# Search queries - WIDE LANE (broader titles)
-SEARCHES_WIDE = [
-    # Research & Applied roles - Ashby
-    {"query": 'applied scientist site:jobs.ashbyhq.com',
-     "location": "US", "role": "Applied Scientist", "ats": "Ashby", "tag": "applied-ashby", "lane": "wide"},
-
-    {"query": 'research engineer site:jobs.ashbyhq.com',
-     "location": "US", "role": "Research Engineer", "ats": "Ashby", "tag": "research-ashby", "lane": "wide"},
-
-    {"query": 'machine learning scientist site:jobs.ashbyhq.com',
-     "location": "US", "role": "ML Scientist", "ats": "Ashby", "tag": "mlsci-ashby", "lane": "wide"},
-
-    # Platform & Infrastructure - Greenhouse
-    {"query": 'ML platform engineer site:boards.greenhouse.io',
-     "location": "US", "role": "ML Platform Engineer", "ats": "Greenhouse", "tag": "mlplat-greenhouse", "lane": "wide"},
-
-    {"query": 'ML infrastructure engineer site:boards.greenhouse.io',
-     "location": "US", "role": "ML Infra Engineer", "ats": "Greenhouse", "tag": "mlinfra-greenhouse", "lane": "wide"},
-
-    # Research & Applied - Workday
-    {"query": 'applied scientist site:myworkdayjobs.com',
-     "location": "US", "role": "Applied Scientist", "ats": "Workday", "tag": "applied-workday", "lane": "wide"},
-
-    {"query": 'research engineer site:myworkdayjobs.com',
-     "location": "US", "role": "Research Engineer", "ats": "Workday", "tag": "research-workday", "lane": "wide"},
-
-    # Specialized roles
-    {"query": 'model engineer site:jobs.lever.co',
-     "location": "US", "role": "Model Engineer", "ats": "Lever", "tag": "model-lever", "lane": "wide"},
-
-    {"query": 'inference engineer site:jobs.ashbyhq.com',
-     "location": "US", "role": "Inference Engineer", "ats": "Ashby", "tag": "inference-ashby", "lane": "wide"},
-
-    {"query": 'AI software engineer site:boards.greenhouse.io',
-     "location": "US", "role": "AI Software Engineer", "ats": "Greenhouse", "tag": "aisw-greenhouse", "lane": "wide"},
-]
-
-# Combined searches (strict by default, add wide if configured)
-if ENABLE_WIDE_LANE:
-    SEARCHES = SEARCHES_STRICT + SEARCHES_WIDE
-    print(f"Total searches: {len(SEARCHES)} (strict + wide lanes)")
-else:
-    SEARCHES = SEARCHES_STRICT
-    print(f"Total searches: {len(SEARCHES)} (strict lane only)")
-
-
-def normalize_url(url):
-    """Normalize URL for deduplication - remove fragments, tracking params, apply suffix"""
-    parsed = urlparse(url)
-    query_params = parse_qs(parsed.query)
-
-    # Remove tracking parameters
-    clean_params = {k: v for k, v in query_params.items()
-                    if not k.startswith('utm_') and k not in ['ref', 'source', 'lever-source', 'gh_jid']}
-
-    clean_query = urlencode(clean_params, doseq=True)
-
-    # Remove /apply suffix for Lever
-    path = parsed.path.rstrip('/')
-    if path.endswith('/apply'):
-        path = path[:-6]
-
-    return urlunparse((
-        parsed.scheme.lower(),
-        parsed.netloc.lower(),
-        path,
-        '',
-        clean_query,
-        ''  # Remove fragment
-    ))
-
-
-def extract_job_id(url):
-    """Extract unique job ID from ATS URLs"""
-    # Greenhouse: handle both /jobs/ID and ?gh_jid=ID formats
-    if 'greenhouse' in url.lower():
-        match = re.search(r'/jobs/(\d+)', url)
-        if match:
-            return f"greenhouse_{match.group(1)}"
-
-        # Fallback: check query parameter
-        parsed = urlparse(url)
-        qs = parse_qs(parsed.query)
-        if 'gh_jid' in qs and qs['gh_jid']:
-            return f"greenhouse_{qs['gh_jid'][0]}"
-
-    if 'ashbyhq.com' in url:
-        match = re.search(r'/([a-f0-9\-]{36})', url)
-        if match:
-            return f"ashby_{match.group(1)}"
-
-    if 'lever.co' in url:
-        match = re.search(r'/([a-f0-9\-]+)(?:/apply)?$', url.rstrip('/'))
-        if match:
-            return f"lever_{match.group(1)}"
-
-    if 'myworkdayjobs.com' in url or 'workday' in url.lower():
-        match = re.search(r'/job/[^/]+/([^/]+)', url)
-        if match:
-            return f"workday_{match.group(1)}"
-
-    if 'smartrecruiters' in url.lower():
-        match = re.search(r'/jobs/(\d+)', url)
-        if match:
-            return f"smartrecruiters_{match.group(1)}"
-
-    if 'workable' in url.lower():
-        match = re.search(r'/j/([A-Z0-9]+)', url)
-        if match:
-            return f"workable_{match.group(1)}"
-
-    return normalize_url(url)
-
-
-def detect_ats(url):
-    """Detect ATS type from URL"""
-    url_lower = url.lower()
-    if 'ashbyhq.com' in url_lower:
-        return 'Ashby'
-    elif 'greenhouse' in url_lower:  # Catches both greenhouse.io and boards.greenhouse.io
-        return 'Greenhouse'
-    elif 'lever.co' in url_lower:
-        return 'Lever'
-    elif 'workday' in url_lower or 'myworkdayjobs' in url_lower:
-        return 'Workday'
-    elif 'icims.com' in url_lower:
-        return 'iCIMS'
-    elif 'smartrecruiters' in url_lower:
-        return 'SmartRecruiters'
-    elif 'workable' in url_lower:
-        return 'Workable'
-    elif 'jobvite' in url_lower:
-        return 'Jobvite'
-    elif 'pinpointhq' in url_lower:
-        return 'Pinpoint'
-    elif 'bamboohr' in url_lower:
-        return 'BambooHR'
-    else:
-        return 'Other'
-
-
-def load_seen_jobs():
-    """Load previously seen job IDs"""
-    if os.path.exists(SEEN_JOBS_FILE):
-        with open(SEEN_JOBS_FILE, 'r') as f:
-            return set(json.load(f))
-    return set()
-
-
-def save_seen_jobs(seen_jobs):
-    """Save seen job IDs to file"""
-    with open(SEEN_JOBS_FILE, 'w') as f:
-        json.dump(sorted(list(seen_jobs)), f, indent=2)
-
-
-def brave_search_paginated(query, max_results=20, freshness='pd'):
-    """
-    Execute Brave Search API with CORRECT pagination
-    Fix: offset is result index, not page number
-
-    freshness options:
-    - 'pd' = past day (24 hours)
-    - 'pw' = past week
-    - 'pm' = past month
-    - 'py' = past year
-    """
-    base_url = "https://api.search.brave.com/res/v1/web/search"
-    headers = {
-        "Accept": "application/json",
-        "Accept-Encoding": "gzip",
-        "X-Subscription-Token": BRAVE_API_KEY
-    }
-
-    all_results = []
-    offset = 0
-    count_per_page = 20
-
-    while len(all_results) < max_results:
-        remaining = max_results - len(all_results)
-        count_this_request = min(count_per_page, remaining)
-
-        params = {
-            "q": query,
-            "count": count_this_request,
-            "offset": offset,
-            "country": "us",
-            "search_lang": "en",
-            "safesearch": "off",
-            "freshness": freshness  # Filter by recency
-        }
-
-        try:
-            response = requests.get(base_url, headers=headers, params=params, timeout=15)
-
-            if response.status_code != 200:
-                try:
-                    error_data = response.json()
-                    error_msg = error_data.get('message', 'Unknown error')
-                except:
-                    error_msg = response.text[:100]
-
-                print(f"   Brave API Error {response.status_code}: {error_msg}")
-                break
-
-            data = response.json()
-            web_results = data.get('web', {}).get('results', [])
-
-            if not web_results:
-                break
-
-            all_results.extend(web_results)
-
-            # FIXED: offset is result index, not page number
-            returned_count = len(web_results)
-            offset += returned_count
-
-            # Check if more results available
-            query_info = data.get('query', {})
-            if not query_info.get('more_results_available', False):
-                break
-
-            if returned_count == 0:
-                break
-
-            time.sleep(0.3)
-
-        except requests.exceptions.RequestException as e:
-            print(f"   Request error: {str(e)[:60]}")
+    brave_path = None
+    for path in brave_paths:
+        if os.path.exists(path):
+            brave_path = path
             break
 
-    return all_results[:max_results]
+    if not brave_path:
+        print("ERROR: Brave browser not found!")
+        print("Please install Brave from: https://brave.com/")
+        print("Or update brave_paths in the script with your Brave location")
+        exit(1)
+
+    print(f"Using Brave at: {brave_path}")
+
+    # Setup Chrome options for Brave
+    options = Options()
+    options.binary_location = brave_path
+
+    # Add options to avoid detection
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--start-maximized')
+    options.add_argument('--disable-gpu')
+
+    # Disable automation flags
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+
+    # Optional: Run headless (no browser window)
+    # options.add_argument('--headless')
+
+    # User agent
+    options.add_argument(
+        'user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+
+    # Create driver using regular Chrome driver (works with Brave)
+    # Just download latest chromedriver, it works with Brave
+    try:
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+    except Exception as e:
+        print(f"Error with ChromeDriverManager: {e}")
+        print("\nTrying alternative method...")
+        # Fallback: try system chromedriver
+        try:
+            driver = webdriver.Chrome(options=options)
+        except Exception as e2:
+            print(f"Error: {e2}")
+            print("\nPlease install chromedriver:")
+            print("  Mac: brew install chromedriver")
+            print("  Or download from: https://chromedriver.chromium.org/")
+            exit(1)
+
+    return driver
 
 
 def is_senior_role(title):
-    """Check if title indicates senior/lead role with exceptions for entry-level"""
+    """Check if title indicates senior role"""
     title_lower = title.lower()
 
-    # Check for entry-level hints first (exceptions)
+    # Check for entry-level exceptions first
     if any(hint in title_lower for hint in ENTRY_HINTS):
         return False
 
-    return any(re.search(pattern, title_lower, re.IGNORECASE) for pattern in SENIOR_PATTERNS)
+    return any(re.search(pattern, title_lower) for pattern in SENIOR_PATTERNS)
 
 
-def is_us_location_relaxed(title, description, query_location="US"):
+def google_search(driver, query, max_results=20, date_filter=None):
     """
-    Relaxed US location filter with post-filtering
-    Since Brave queries are broader, we filter more aggressively in parsing
-
-    3-tier:
-    1. Reject if explicitly non-US
-    2. Accept if explicitly US
-    3. Accept if unknown (verify later via ATS page)
+    Perform Google search and extract job links
+    date_filter: Google date filter like 'after:2026-01-21' for last 48 hours
     """
-    text = f"{title} {description}".lower()
-
-    # Strong negative indicators
-    has_negative = any(neg in text for neg in US_NEGATIVE)
-    has_positive = any(pos in text for pos in US_POSITIVE)
-
-    # Tier 1: Explicitly non-US
-    if has_negative and not has_positive:
-        return False
-
-    # For queries without location specified, be more permissive
-    # Most jobs will be US-based due to country=us param in API
-
-    # Tier 2 & 3: Explicitly US or unknown (accept both)
-    return True
-
-
-def phrase_pattern(keyword):
-    """
-    Create separator-tolerant regex pattern for multi-word phrases
-    Handles: "generative-ai", "retrieval augmented", "RAG (retrieval augmented)"
-    """
-    parts = [re.escape(p) for p in keyword.strip().split()]
-    if len(parts) > 1:
-        return r'\b' + r'[\s\-_\/]+'.join(parts) + r'\b'
-    return r'\b' + re.escape(keyword) + r'\b'
-
-
-def count_keyword_matches(text, keywords):
-    """Count keyword matches using separator-tolerant patterns"""
-    matches = []
-    for keyword in keywords:
-        pattern = phrase_pattern(keyword)
-        if re.search(pattern, text, re.IGNORECASE):
-            matches.append(keyword)
-    return matches
-
-
-def compute_fit_score(title, description):
-    """
-    Improved fit scoring with negative hints and better keyword matching
-    """
-    text = f"{title} {description}".lower()
-    score = 0
-    reasons = []
-
-    # Target title match (30 points)
-    if any(re.search(pattern, title.lower()) for pattern in TARGET_TITLE_PATTERNS):
-        score += 30
-        reasons.append("target_title")
-    else:
-        # If no title match, require at least some ML keywords with word boundaries
-        has_ml_keywords = (
-                "machine learning" in text
-                or re.search(r'\bml\b', text)
-                or re.search(r'\bai\b', text)
-                or re.search(r'\bllm\b', text)
-        )
-        if not has_ml_keywords:
-            return 0, "no_ml_content", ""
-
-    # LLM/GenAI keywords (25 points)
-    llm_matches = count_keyword_matches(text, KEYWORDS_LLM)
-    if llm_matches:
-        score += 25
-        reasons.append("llm_genai")
-
-    # Computer Vision keywords (20 points)
-    cv_matches = count_keyword_matches(text, KEYWORDS_CV)
-    if cv_matches:
-        score += 20
-        reasons.append("cv_multimodal")
-
-    # MLOps keywords (15 points)
-    mlops_matches = count_keyword_matches(text, KEYWORDS_MLOPS)
-    if mlops_matches:
-        score += 15
-        reasons.append("mlops_infra")
-
-    # Negative hints penalty
-    negative_count = sum(1 for hint in NEGATIVE_HINTS if hint in text)
-    if negative_count > 0:
-        penalty = min(negative_count * 10, 30)
-        score -= penalty
-        reasons.append(f"negative_hints_{negative_count}")
-
-    # Lead penalty
-    if re.search(r'\blead\s', title.lower()) or title.lower().startswith('lead '):
-        score -= 15
-        reasons.append("lead_penalty")
-
-    all_matches = llm_matches + cv_matches + mlops_matches
-    keywords_str = ", ".join(all_matches[:5])
-
-    return max(score, 0), ", ".join(reasons), keywords_str
-
-
-def extract_company_name(url, title):
-    """Extract company name from URL or title"""
-    if 'ashbyhq.com' in url:
-        match = re.search(r'jobs\.ashbyhq\.com/([^/]+)', url)
-        if match:
-            return match.group(1).replace('-', ' ').title()
-
-    if 'greenhouse.io' in url:
-        match = re.search(r'boards\.greenhouse\.io/([^/]+)', url)
-        if match:
-            return match.group(1).replace('-', ' ').title()
-
-    if 'lever.co' in url:
-        match = re.search(r'jobs\.lever\.co/([^/]+)', url)
-        if match:
-            return match.group(1).replace('-', ' ').title()
-
-    if ' at ' in title:
-        return title.split(' at ')[-1].strip()
-
-    if ' - ' in title:
-        parts = title.split(' - ')
-        if len(parts) > 1:
-            return parts[-1].strip()
-
-    return "Unknown"
-
-
-def verify_ats_job_page(url):
-    """
-    Fetch ATS job page and extract:
-    - posted_at (datetime)
-    - location (verified)
-    - employment_type (full-time/intern/contract)
-    - remote_status (remote/hybrid/on-site)
-    """
-    try:
-        response = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
-        if response.status_code != 200:
-            return None
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-        ats_type = detect_ats(url)
-
-        result = {
-            'posted_at': None,
-            'location': None,
-            'employment_type': None,
-            'remote_status': None
-        }
-
-        # Try generic JSON-LD JobPosting first (works across many ATS)
-        scripts = soup.find_all('script', type='application/ld+json')
-        for script in scripts:
-            try:
-                data = json.loads(script.string)
-                if isinstance(data, dict) and data.get('@type') == 'JobPosting':
-                    result['posted_at'] = data.get('datePosted')
-
-                    # Location can be nested differently
-                    job_location = data.get('jobLocation', {})
-                    if isinstance(job_location, dict):
-                        address = job_location.get('address', {})
-                        if isinstance(address, dict):
-                            result['location'] = address.get('addressLocality') or address.get('addressRegion')
-
-                    result['employment_type'] = data.get('employmentType')
-
-                    # If we got posted_at, we can return early
-                    if result['posted_at']:
-                        # Still check for remote status in page text
-                        page_text = soup.get_text().lower()
-                        if 'remote' in page_text or 'work from home' in page_text:
-                            result['remote_status'] = 'hybrid' if 'hybrid' in page_text else 'remote'
-                        else:
-                            result['remote_status'] = 'on-site'
-                        return result
-            except:
-                pass
-
-        # Ashby-specific parsing (if JSON-LD didn't work)
-        if ats_type == 'Ashby':
-            # Ashby usually has good JSON-LD, but fallback if needed
-            pass
-
-        # Greenhouse-specific parsing
-        elif ats_type == 'Greenhouse':
-            # Look for posted date in metadata
-            meta_date = soup.find('meta', property='og:published_time') or soup.find('time')
-            if meta_date:
-                result['posted_at'] = meta_date.get('content') or meta_date.get('datetime')
-
-            # Location
-            location_div = soup.find('div', class_='location')
-            if location_div:
-                result['location'] = location_div.text.strip()
-
-        # Lever-specific parsing
-        elif ats_type == 'Lever':
-            # Lever often has posting info in specific divs
-            posting_meta = soup.find('div', class_='posting-categories')
-            if posting_meta:
-                location_elem = posting_meta.find('div', class_='location')
-                if location_elem:
-                    result['location'] = location_elem.text.strip()
-
-            # Look for time tags
-            time_tag = soup.find('time')
-            if time_tag:
-                result['posted_at'] = time_tag.get('datetime')
-
-        # Workday-specific parsing
-        elif ats_type == 'Workday':
-            # Workday often includes date in specific elements
-            date_elem = soup.find('span', class_='css-1ez8oav')  # Common Workday class
-            if date_elem:
-                # Parse relative dates like "Posted 2 days ago"
-                date_text = date_elem.text.lower()
-                if 'today' in date_text or '0 day' in date_text:
-                    result['posted_at'] = datetime.now().isoformat()
-                elif 'yesterday' in date_text or '1 day' in date_text:
-                    result['posted_at'] = (datetime.now() - timedelta(days=1)).isoformat()
-                elif 'days ago' in date_text:
-                    days_match = re.search(r'(\d+)\s+days?\s+ago', date_text)
-                    if days_match:
-                        days = int(days_match.group(1))
-                        result['posted_at'] = (datetime.now() - timedelta(days=days)).isoformat()
-
-        # Parse text for remote status (applies to all ATS)
-        page_text = soup.get_text().lower()
-        if 'remote' in page_text or 'work from home' in page_text:
-            if 'hybrid' in page_text:
-                result['remote_status'] = 'hybrid'
-            else:
-                result['remote_status'] = 'remote'
-        else:
-            result['remote_status'] = 'on-site'
-
-        return result
-
-    except Exception as e:
-        return None
-
-
-def parse_brave_results(results, metadata):
-    """Parse Brave Search results with improved filtering"""
     jobs = []
 
-    for item in results:
-        url = item.get('url', '')
-        title = item.get('title', 'No Title')
-        description = item.get('description', '')
+    try:
+        # Navigate to Google
+        driver.get("https://www.google.com")
+        time.sleep(2)
 
-        # Detect actual ATS from URL (not from query metadata)
-        actual_ats = detect_ats(url)
+        # Find search box and enter query with time filter
+        search_box = driver.find_element(By.NAME, "q")
+        search_box.clear()
 
-        # Extract company domain
-        parsed_url = urlparse(url)
-        company_domain = parsed_url.netloc
-
-        # Filter 1: Senior roles (with entry-level exceptions) - only for strict lane
-        if metadata.get('lane') == 'strict' and is_senior_role(title):
-            continue
-
-        # Filter 2: Relaxed US location filter (post-filter since queries are broader)
-        if not is_us_location_relaxed(title, description, metadata.get('location', 'US')):
-            continue
-
-        # Compute fit score
-        fit_score, fit_reasons, keywords_matched = compute_fit_score(title, description)
-
-        # Filter 3: Low fit score or no ML content
-        if fit_score < 35:
-            continue
-
-        job_id = extract_job_id(url)
-
-        # Guess remote status from snippet
-        snippet_lower = description.lower()
-        is_remote_guess = 'remote' in snippet_lower or 'work from home' in snippet_lower
-
-        job = {
-            'title': title,
-            'company': extract_company_name(url, title),
-            'company_domain': company_domain,
-            'url': url,
-            'job_id': job_id,
-            'snippet': description[:200],
-            'location': metadata['location'],
-            'role_category': metadata['role'],
-            'ats': actual_ats,
-            'query_tag': metadata['tag'],
-            'query_used': metadata['query'][:80],
-            'lane': metadata.get('lane', 'strict'),
-            'fit_score': fit_score,
-            'fit_reasons': fit_reasons,
-            'keywords_matched': keywords_matched,
-            'is_remote_guess': is_remote_guess,
-            'date_found': datetime.now().strftime('%Y-%m-%d %H:%M'),
-            'posted_at': None,
-            'hours_old': None,
-            'employment_type': None,
-            'remote_status': None,
-            'verified_location': None,
-            'apply_priority': None,
-            'status': 'Not Applied'
-        }
-        jobs.append(job)
-
-    return jobs
-
-
-def verify_jobs_batch(jobs):
-    """Verify job pages in parallel to extract posted dates and metadata"""
-    if not VERIFY_JOB_PAGES:
-        return jobs
-
-    print(f"\n   Verifying {len(jobs)} job pages for posted dates...")
-
-    def verify_job(job):
-        verification = verify_ats_job_page(job['url'])
-        if verification:
-            job['posted_at'] = verification['posted_at']
-            job['verified_location'] = verification['location']
-            job['employment_type'] = verification['employment_type']
-            job['remote_status'] = verification['remote_status']
-
-            # Compute hours_old
-            if job['posted_at']:
-                try:
-                    posted_dt = datetime.fromisoformat(job['posted_at'].replace('Z', '+00:00'))
-                    hours_old = (datetime.now(posted_dt.tzinfo) - posted_dt).total_seconds() / 3600
-                    job['hours_old'] = round(hours_old, 1)
-                except:
-                    pass
-
-        return job
-
-    # Use thread pool for concurrent verification (rate-limited)
-    verified_jobs = []
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        future_to_job = {executor.submit(verify_job, job): job for job in jobs}
-
-        for future in as_completed(future_to_job):
-            try:
-                verified_job = future.result(timeout=15)
-                verified_jobs.append(verified_job)
-            except Exception as e:
-                job = future_to_job[future]
-                verified_jobs.append(job)
-
-            time.sleep(0.2)  # Rate limit
-
-    print(f"   Verified {len(verified_jobs)} jobs")
-    return verified_jobs
-
-
-def filter_by_posted_date(jobs, max_hours=48):
-    """Filter jobs by posted date (only keep recent)"""
-    if not VERIFY_JOB_PAGES:
-        return jobs
-
-    recent_jobs = []
-    for job in jobs:
-        if job['hours_old'] is not None:
-            if job['hours_old'] <= max_hours:
-                recent_jobs.append(job)
+        # Add time filter to query if provided
+        if date_filter:
+            query_with_time = f"{query} after:{date_filter}"
         else:
-            # Keep jobs where we couldn't verify date (don't lose them)
-            recent_jobs.append(job)
+            query_with_time = query
 
-    return recent_jobs
+        search_box.send_keys(query_with_time)
+        search_box.send_keys(Keys.RETURN)
 
+        # Wait for results to load
+        print(f"    Searching: {query_with_time}")
+        time.sleep(4)
 
-def calculate_apply_priority(job):
-    """
-    Calculate apply priority (A/B/C) based on fit_score, hours_old, and ATS
-    A = High priority (apply today)
-    B = Medium priority (apply this week)
-    C = Lower priority (apply if time permits)
-    """
-    score = job['fit_score']
-    hours = job['hours_old'] or 999
-    ats = job['ats']
+        # Debug: Check if we got results
+        page_source = driver.page_source
+        if "did not match any documents" in page_source or "No results found" in page_source:
+            print("    Google says: No results found")
+            return []
 
-    # Priority ATS platforms (faster to apply)
-    fast_ats = ['Ashby', 'Greenhouse', 'Lever']
+        # Extract search results - try multiple selectors
+        results_collected = 0
+        page = 0
 
-    # A priority: high score, recent, easy to apply
-    if score >= 60 and hours <= 24 and ats in fast_ats:
-        return 'A'
-    elif score >= 55 and hours <= 48:
-        return 'A'
+        while results_collected < max_results and page < 3:
+            try:
+                # Try different Google result selectors
+                search_results = []
 
-    # B priority: decent score, reasonably recent
-    elif score >= 50 and hours <= 72:
-        return 'B'
-    elif score >= 45 and hours <= 48:
-        return 'B'
+                # Method 1: Standard div.g selector
+                search_results = driver.find_elements(By.CSS_SELECTOR, 'div.g')
 
-    # C priority: everything else that passed filters
-    else:
-        return 'C'
+                if not search_results:
+                    # Method 2: Try alternative selector
+                    search_results = driver.find_elements(By.CSS_SELECTOR, 'div[data-sokoban-container]')
+
+                if not search_results:
+                    # Method 3: Find all links in search results
+                    search_results = driver.find_elements(By.CSS_SELECTOR, 'div#search a')
+
+                print(f"    Found {len(search_results)} result elements on page")
+
+                for result in search_results:
+                    if results_collected >= max_results:
+                        break
+
+                    try:
+                        # Try to extract title and URL
+                        title = None
+                        url = None
+                        snippet = ""
+
+                        # Method 1: Standard extraction
+                        try:
+                            title_elem = result.find_element(By.CSS_SELECTOR, 'h3')
+                            title = title_elem.text
+                            link_elem = result.find_element(By.CSS_SELECTOR, 'a')
+                            url = link_elem.get_attribute('href')
+                        except:
+                            pass
+
+                        # Method 2: Direct link extraction
+                        if not url:
+                            try:
+                                url = result.get_attribute('href')
+                                # Get parent text as title
+                                title = result.text.split('\n')[0] if result.text else None
+                            except:
+                                pass
+
+                        # Try to get snippet
+                        try:
+                            snippet_elem = result.find_element(By.CSS_SELECTOR, 'div.VwiC3b')
+                            snippet = snippet_elem.text
+                        except:
+                            try:
+                                snippet_elem = result.find_element(By.CSS_SELECTOR, 'div.kb0PBd, div.yXK7lf')
+                                snippet = snippet_elem.text
+                            except:
+                                pass
+
+                        # Validation
+                        if not url or not title:
+                            continue
+
+                        if not url.startswith('http'):
+                            continue
+
+                        # Skip non-job URLs
+                        if 'google.com' in url or 'youtube.com' in url:
+                            continue
+
+                        # Must be from target ATS (pharma/biotech platforms)
+                        if not any(ats in url for ats in ['myworkdayjobs.com', 'icims.com', 'greenhouse.io',
+                                                          'lever.co', 'careers.hcahealthcare.com',
+                                                          'taleo.net', 'successfactors.com']):
+                            continue
+
+                        # Filter senior roles
+                        if is_senior_role(title):
+                            print(f"    FILTERED (senior): {title[:60]}")
+                            continue
+
+                        print(f"    ✓ Found: {title[:60]}")
+
+                        jobs.append({
+                            'title': title,
+                            'url': url,
+                            'snippet': snippet[:200]
+                        })
+
+                        results_collected += 1
+
+                    except Exception as e:
+                        continue
+
+                # Try to go to next page
+                if results_collected < max_results and page < 2:
+                    try:
+                        # Find "Next" button
+                        next_button = driver.find_element(By.ID, "pnnext")
+                        next_button.click()
+                        time.sleep(4)
+                        page += 1
+                        print(f"    Going to page {page + 1}...")
+                    except:
+                        # No more pages
+                        break
+                else:
+                    break
+
+            except Exception as e:
+                print(f"    Error extracting results: {str(e)[:50]}")
+                break
+
+        return jobs
+
+    except Exception as e:
+        print(f"    Search error: {str(e)[:80]}")
+        return []
 
 
 def save_to_csv(jobs, filename):
-    """Save jobs to CSV with enhanced columns"""
+    """Save jobs to CSV"""
     if not jobs:
         return
 
     file_exists = os.path.exists(filename)
 
-    fieldnames = [
-        'apply_priority', 'fit_score', 'hours_old', 'title', 'company', 'company_domain',
-        'location', 'verified_location', 'is_remote_guess', 'remote_status', 'employment_type',
-        'role_category', 'ats', 'query_tag', 'lane', 'keywords_matched', 'fit_reasons',
-        'url', 'posted_at', 'date_found', 'status', 'query_used', 'snippet'
-    ]
+    fieldnames = ['title', 'url', 'snippet', 'role_category', 'ats', 'date_found']
 
     with open(filename, 'a', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -841,118 +369,79 @@ def save_to_csv(jobs, filename):
             writer.writeheader()
 
         for job in jobs:
-            # Calculate apply priority before writing
-            job['apply_priority'] = calculate_apply_priority(job)
-            row = {k: job.get(k, '') for k in fieldnames}
-            writer.writerow(row)
-
-
-def save_top_jobs(jobs, base_filename, limit=10):
-    """Save top N jobs to separate file for quick review with date in filename"""
-    if not jobs:
-        return
-
-    # Add date to filename
-    date_str = datetime.now().strftime('%Y-%m-%d')
-    filename = base_filename.replace('.csv', f'_{date_str}.csv')
-
-    # Sort by fit score, then by hours_old (newer first)
-    sorted_jobs = sorted(jobs, key=lambda x: (x['fit_score'], -(x['hours_old'] or 999)), reverse=True)
-    top_jobs = sorted_jobs[:limit]
-
-    fieldnames = [
-        'apply_priority', 'fit_score', 'hours_old', 'title', 'company', 'location',
-        'is_remote_guess', 'remote_status', 'url', 'posted_at', 'keywords_matched', 'ats'
-    ]
-
-    with open(filename, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-
-        for job in top_jobs:
-            job['apply_priority'] = calculate_apply_priority(job)
-            row = {k: job.get(k, '') for k in fieldnames}
-            writer.writerow(row)
-
-    return filename
+            writer.writerow(job)
 
 
 def main():
     """Main execution"""
     print("=" * 70)
-    print("AI/ML JOB SCRAPER - LAST 24 HOURS ONLY")
-    print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"GMP QA & DOCUMENT CONTROL JOB SCRAPER - LAST {HOURS_LOOKBACK} HOURS")
+    print(f"Started: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Searching jobs posted after: {lookback_date.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Google filter: after:{date_filter}")
     print(f"Queries: {len(SEARCHES)}")
-    print(f"Freshness: {FRESHNESS} (searching jobs from last 24 hours)")
-    print(f"Output: {OUTPUT_FILE}")
     print("=" * 70)
 
-    seen_jobs = load_seen_jobs()
-    all_new_jobs = []
+    # Setup browser
+    print("\nSetting up Brave browser...")
+    driver = setup_brave_driver()
+    print("Browser ready!")
 
-    for idx, search_config in enumerate(SEARCHES, 1):
-        print(
-            f"\n[{idx}/{len(SEARCHES)}] {search_config['role']} | {search_config['location']} | {search_config['ats']}")
+    all_jobs = []
 
-        results = brave_search_paginated(
-            query=search_config['query'],
-            max_results=MAX_RESULTS_PER_QUERY,
-            freshness=FRESHNESS  # Use configured freshness
-        )
+    try:
+        for idx, search_config in enumerate(SEARCHES, 1):
+            print(f"\n[{idx}/{len(SEARCHES)}] {search_config['role']} | {search_config['ats']}")
+            print(f"Query: {search_config['query']}")
 
-        if results:
-            jobs = parse_brave_results(results, search_config)
-            new_jobs = [job for job in jobs if job['job_id'] not in seen_jobs]
+            jobs = google_search(
+                driver,
+                search_config['query'],
+                max_results=MAX_RESULTS_PER_QUERY,
+                date_filter=date_filter  # Pass calculated date
+            )
 
-            if new_jobs:
-                print(f"   Found {len(new_jobs)} new high-fit jobs")
+            if jobs:
+                # Add metadata
+                for job in jobs:
+                    job['role_category'] = search_config['role']
+                    job['ats'] = search_config['ats']
+                    job['date_found'] = datetime.now().strftime('%Y-%m-%d %H:%M')
 
-                # Verify jobs to get posted dates
-                verified_jobs = verify_jobs_batch(new_jobs)
-
-                # Filter by posted date
-                recent_jobs = filter_by_posted_date(verified_jobs, MAX_HOURS_OLD)
-
-                if recent_jobs:
-                    print(f"   {len(recent_jobs)} jobs posted in last {MAX_HOURS_OLD}h")
-                    all_new_jobs.extend(recent_jobs)
-                    seen_jobs.update([job['job_id'] for job in recent_jobs])
-                else:
-                    print(f"   No jobs posted in last {MAX_HOURS_OLD}h")
+                print(f"   Found {len(jobs)} jobs")
+                all_jobs.extend(jobs)
             else:
-                print(f"   No new jobs")
+                print(f"   No jobs found")
+
+            # Delay between searches to avoid detection
+            if idx < len(SEARCHES):
+                print(f"   Waiting {DELAY_BETWEEN_SEARCHES} seconds...")
+                time.sleep(DELAY_BETWEEN_SEARCHES)
+
+        # Save results
+        if all_jobs:
+            save_to_csv(all_jobs, OUTPUT_FILE)
+
+            print("\n" + "=" * 70)
+            print(f"SUCCESS: Found {len(all_jobs)} total jobs")
+            print(f"Saved to: {OUTPUT_FILE}")
+            print("=" * 70)
+
+            # Print top 10
+            print("\nTOP 10 JOBS:")
+            for i, job in enumerate(all_jobs[:10], 1):
+                print(f"\n{i}. {job['title']}")
+                print(f"   {job['url']}")
         else:
-            print(f"   No results")
+            print("\n" + "=" * 70)
+            print("No jobs found this run")
+            print("=" * 70)
 
-        time.sleep(DELAY_BETWEEN_SEARCHES)
-
-    # Sort by fit score descending
-    all_new_jobs.sort(key=lambda x: (x['fit_score'], -(x['hours_old'] or 999)), reverse=True)
-
-    if all_new_jobs:
-        save_to_csv(all_new_jobs, OUTPUT_FILE)
-        top_file = save_top_jobs(all_new_jobs, TOP_JOBS_FILE, limit=10)
-        save_seen_jobs(seen_jobs)
-
-        print("\n" + "=" * 70)
-        print(f"SUCCESS: Found {len(all_new_jobs)} high-fit jobs")
-        print(f"Top score: {all_new_jobs[0]['fit_score']}")
-        print(f"Saved to: {OUTPUT_FILE}")
-        if top_file:
-            print(f"Top 10 saved to: {top_file}")
-        print("=" * 70)
-
-        # Print top 5 for quick review
-        print("\nTOP 5 JOBS:")
-        for i, job in enumerate(all_new_jobs[:5], 1):
-            hours = f"{job['hours_old']}h" if job['hours_old'] else "?"
-            priority = calculate_apply_priority(job)
-            print(f"{i}. [{priority}] [{job['fit_score']}] {job['title']} at {job['company']} ({hours} old)")
-            print(f"   {job['url']}")
-    else:
-        print("\n" + "=" * 70)
-        print("No new jobs found this run")
-        print("=" * 70)
+    finally:
+        # Close browser
+        print("\nClosing browser...")
+        driver.quit()
+        print("Done!")
 
 
 if __name__ == "__main__":
