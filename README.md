@@ -204,7 +204,7 @@ driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
 
 ### Experiment 2: Brave Search API (PARTIAL SUCCESS)
 
-**API key:** BSA7b5nQvyeVz2JclMKm_D6yJUalZO1
+**API key:** 
 
 **Issues discovered:**
 - Rate limiting (HTTP 429) after 3-4 queries
