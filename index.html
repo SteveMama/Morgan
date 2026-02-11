@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Morgan's AI/ML Job Search - Find fresh AI and Machine Learning jobs with LLM-powered search optimization">
+    <title>Morgan's AI/ML Job Search</title>
+    <style>
+        :root {
+            --sans-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --bg: #f4f4f4;
+            --accent-bg: #f5f7ff;
+            --text: #212121;
+            --text-light: #585858;
+            --border: #898EA4;
+            --accent: #0d47a1;
+            --accent-text: #fff;
+            --resultsbg: #fff;
+            --linktext: #0000EE;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #1a1a1a;
+                --accent-bg: #2b2b2b;
+                --text: #fff;
+                --text-light: #ccc;
+                --accent: #ffb300;
+                --resultsbg: #2b2b2b;
+                --linktext: #8ab4f8;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--sans-font);
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 0;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--text-light);
+            font-size: 1.1rem;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 1rem;
+            color: var(--text-light);
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Search Tab */
+        .search-form {
+            background: var(--accent-bg);
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            font-size: 1rem;
+            background: var(--resultsbg);
+            color: var(--text);
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        button {
+            background: var(--accent);
+            color: var(--accent-text);
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: filter 0.3s;
+        }
+
+        button:hover {
+            filter: brightness(1.2);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .results {
+            margin-top: 30px;
+        }
+
+        .result-item {
+            background: var(--resultsbg);
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            border: 1px solid var(--border);
+        }
+
+        .result-item h3 {
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+
+        .result-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .result-links a {
+            display: inline-block;
+            padding: 6px 12px;
+            background: var(--accent-bg);
+            color: var(--linktext);
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            transition: background 0.3s;
+        }
+
+        .result-links a:hover {
+            background: var(--border);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-light);
+        }
+
+        .notice {
+            background: var(--accent-bg);
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid var(--accent);
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 60px;
+            padding-top: 30px;
+            border-top: 1px solid var(--border);
+            color: var(--text-light);
+        }
+
+        footer a {
+            color: var(--linktext);
+        }
+
+        .optimized-queries {
+            background: var(--resultsbg);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 2px solid var(--accent);
+        }
+
+        .optimized-queries h3 {
+            margin-bottom: 15px;
+        }
+
+        .query-chip {
+            display: inline-block;
+            padding: 8px 16px;
+            background: var(--accent);
+            color: var(--accent-text);
+            border-radius: 20px;
+            margin: 5px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Morgan's AI/ML Job Search</h1>
+            <p class="subtitle">Find fresh AI jobs with LLM-powered search optimization</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('search')">Job Search</button>
+            <button class="tab" onclick="switchTab('optimizer')">JD Optimizer</button>
+        </div>
+
+        <!-- TAB 1: JOB SEARCH -->
+        <div id="search-tab" class="tab-content active">
+            <div class="search-form">
+                <label for="jobTitle">Job Title</label>
+                <input type="text" id="jobTitle" placeholder="e.g., Machine Learning Engineer, LLM Engineer" />
+
+                <label for="timeFilter">Time Range</label>
+                <select id="timeFilter">
+                    <option value="24hours" selected>Past 24 Hours</option>
+                    <option value="48hours">Past 48 Hours</option>
+                    <option value="72hours">Past 72 Hours</option>
+                    <option value="week">Past Week</option>
+                </select>
+
+                <label for="locationFilter">Location</label>
+                <select id="locationFilter">
+                    <option value="usa">United States</option>
+                    <option value="remote">Remote (US)</option>
+                    <option value="nyc">New York</option>
+                    <option value="sf">San Francisco / Bay Area</option>
+                    <option value="boston">Boston</option>
+                    <option value="seattle">Seattle</option>
+                    <option value="austin">Austin</option>
+                </select>
+
+                <button onclick="generateJobLinks()">Search Jobs</button>
+            </div>
+
+            <div id="searchResults" class="results"></div>
+        </div>
+
+        <!-- TAB 2: JD OPTIMIZER -->
+        <div id="optimizer-tab" class="tab-content">
+            <div class="search-form">
+                <label for="jobDescription">Paste Job Description</label>
+                <textarea id="jobDescription" placeholder="Paste the full job description here..."></textarea>
+
+                <button onclick="optimizeJobDescription()" id="optimizeBtn">
+                    Generate Search Terms
+                </button>
+
+                <div class="notice" style="margin-top: 15px;">
+                    <strong>What this does:</strong> Uses AI to extract the most important keywords from the job description, then generates optimized Google search queries to find similar roles.
+                </div>
+            </div>
+
+            <div id="optimizedResults"></div>
+        </div>
+
+        <footer>
+            <p>Created for finding AI/ML jobs before the crowd | <a href="https://github.com/yourusername/morgan" target="_blank">GitHub</a></p>
+            <p style="margin-top: 10px; font-size: 0.9rem;">Powered by Groq API (free tier)</p>
+        </footer>
+    </div>
+
+    <script>
+        // Tab switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+        }
+
+        // ATS platforms configuration
+        const ATS_PLATFORMS = {
+            'Ashby': 'jobs.ashbyhq.com',
+            'Greenhouse': 'boards.greenhouse.io',
+            'Lever': 'jobs.lever.co',
+            'Workday': 'myworkdayjobs.com',
+            'SmartRecruiters': 'jobs.smartrecruiters.com',
+            'Workable': 'apply.workable.com',
+            'Jobvite': 'jobs.jobvite.com',
+            'Career Pages': 'site:*/careers/*'
+        };
+
+        // Time filter mapping
+        const TIME_FILTERS = {
+            '24hours': '&tbs=qdr:d',
+            '48hours': '&tbs=qdr:h48',
+            '72hours': '&tbs=qdr:h72',
+            'week': '&tbs=qdr:w'
+        };
+
+        // Location mapping
+        const LOCATIONS = {
+            'usa': 'United States',
+            'remote': 'remote United States',
+            'nyc': 'New York',
+            'sf': 'San Francisco OR "Bay Area"',
+            'boston': 'Boston OR Cambridge',
+            'seattle': 'Seattle',
+            'austin': 'Austin'
+        };
+
+        // Generate job search links
+        function generateJobLinks() {
+            const jobTitle = document.getElementById('jobTitle').value.trim();
+            const timeFilter = document.getElementById('timeFilter').value;
+            const location = document.getElementById('locationFilter').value;
+
+            if (!jobTitle) {
+                alert('Please enter a job title');
+                return;
+            }
+
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.innerHTML = '';
+
+            const timeParam = TIME_FILTERS[timeFilter] || '';
+            const locationQuery = LOCATIONS[location] || 'United States';
+
+            // Create result section
+            const header = document.createElement('h2');
+            header.textContent = `${jobTitle} - ${timeFilter.replace('hours', ' Hours').replace('week', ' Week')}`;
+            resultsDiv.appendChild(header);
+
+            // Generate link for each ATS platform
+            Object.entries(ATS_PLATFORMS).forEach(([name, site]) => {
+                const resultItem = document.createElement('div');
+                resultItem.className = 'result-item';
+
+                const h3 = document.createElement('h3');
+                h3.textContent = name;
+
+                // Build Google search URL
+                let googleQuery = `"${jobTitle}" ${locationQuery} site:${site}`;
+                const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}${timeParam}`;
+
+                const link = document.createElement('a');
+                link.href = googleUrl;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.textContent = `Search ${name} →`;
+                link.className = 'ats-link';
+
+                const linkContainer = document.createElement('div');
+                linkContainer.className = 'result-links';
+                linkContainer.appendChild(link);
+
+                resultItem.appendChild(h3);
+                resultItem.appendChild(linkContainer);
+                resultsDiv.appendChild(resultItem);
+            });
+
+            // Scroll to results
+            resultsDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // LLM-powered job description optimizer
+        async function optimizeJobDescription() {
+            const jd = document.getElementById('jobDescription').value.trim();
+            const btn = document.getElementById('optimizeBtn');
+            const resultsDiv = document.getElementById('optimizedResults');
+
+            if (!jd) {
+                alert('Please paste a job description');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Analyzing with AI...';
+            resultsDiv.innerHTML = '<div class="loading">Processing job description...</div>';
+
+            try {
+                // Call backend API
+                const response = await fetch('/api/optimize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jobDescription: jd })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                // Check if we got valid data
+                if (!data.keywords || !data.suggestedTitles) {
+                    throw new Error('Invalid response from API');
+                }
+
+                // Display optimized queries
+                resultsDiv.innerHTML = '';
+
+                const optimizedSection = document.createElement('div');
+                optimizedSection.className = 'optimized-queries';
+
+                const header = document.createElement('h3');
+                header.textContent = '✨ Optimized Search Terms';
+                optimizedSection.appendChild(header);
+
+                const description = document.createElement('p');
+                description.textContent = 'AI extracted these key terms from the job description:';
+                description.style.marginBottom = '15px';
+                optimizedSection.appendChild(description);
+
+                // Display keywords as chips
+                if (data.keywords && data.keywords.length > 0) {
+                    data.keywords.forEach(keyword => {
+                        const chip = document.createElement('span');
+                        chip.className = 'query-chip';
+                        chip.textContent = keyword;
+                        optimizedSection.appendChild(chip);
+                    });
+                }
+
+                resultsDiv.appendChild(optimizedSection);
+
+                // Generate search links
+                const searchSection = document.createElement('div');
+                searchSection.style.marginTop = '30px';
+
+                const searchHeader = document.createElement('h3');
+                searchHeader.textContent = '🔍 Recommended Searches';
+                searchSection.appendChild(searchHeader);
+
+                if (data.suggestedTitles && data.suggestedTitles.length > 0) {
+                    data.suggestedTitles.forEach(title => {
+                        const resultItem = document.createElement('div');
+                        resultItem.className = 'result-item';
+
+                        const h4 = document.createElement('h4');
+                        h4.textContent = title;
+
+                        const linksContainer = document.createElement('div');
+                        linksContainer.className = 'result-links';
+
+                        // Top 3 ATS platforms
+                        ['Ashby', 'Greenhouse', 'Lever'].forEach(atsName => {
+                            const site = ATS_PLATFORMS[atsName];
+                            const googleQuery = `"${title}" "United States" site:${site}`;
+                            const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}&tbs=qdr:d`;
+
+                            const link = document.createElement('a');
+                            link.href = googleUrl;
+                            link.target = '_blank';
+                            link.textContent = atsName;
+                            linksContainer.appendChild(link);
+                        });
+
+                        resultItem.appendChild(h4);
+                        resultItem.appendChild(linksContainer);
+                        searchSection.appendChild(resultItem);
+                    });
+                }
+
+                resultsDiv.appendChild(searchSection);
+
+            } catch (error) {
+                console.error('Error:', error);
+                resultsDiv.innerHTML = `<div class="notice" style="border-left-color: red;">
+                    <strong>Error:</strong> ${error.message}<br><br>
+                    <small>Make sure the Flask backend is running and GROQ_API_KEY is set.</small>
+                </div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Search Terms';
+            }
+        }
+
+        // Enter key support
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('jobTitle').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') generateJobLinks();
+            });
+        });
+    </script>
+</body>
+</html>
