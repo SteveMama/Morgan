@@ -67,3 +67,4 @@ gmp_jobs_output/
 
 .env_prod
 .env_google.env*
+.env*
