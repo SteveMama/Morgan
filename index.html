@@ -68,6 +68,8 @@ textarea { min-height:180px; resize:vertical; line-height:1.6; }
 }
 .btn-primary { background:var(--accent); color:var(--bg); border-color:var(--accent); width:100%; }
 .btn-primary:active { background:var(--accent-dim); transform:scale(0.98); }
+.btn-secondary { background:var(--surface-2); color:var(--text); border-color:var(--border); width:100%; margin-top:12px; }
+.btn-secondary:active { background:var(--border); transform:scale(0.98); }
 .btn:disabled { opacity:0.5; pointer-events:none; }
 
 .results { margin-top:24px; }
@@ -94,6 +96,51 @@ textarea { min-height:180px; resize:vertical; line-height:1.6; }
   border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px;
 }
 @keyframes spin { to { transform:rotate(360deg); } }
+
+.job-cards {
+  display:grid; gap:16px; margin-top:20px;
+}
+
+.job-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:20px; transition:all 0.2s;
+}
+
+.job-card:hover {
+  border-color:var(--accent); transform:translateY(-2px);
+}
+
+.job-title {
+  font-size:16px; font-weight:600; margin-bottom:8px; color:var(--text);
+}
+
+.job-company {
+  font-size:14px; color:var(--text-dim); margin-bottom:4px;
+}
+
+.job-location {
+  font-size:12px; color:var(--text-muted); margin-bottom:8px;
+}
+
+.job-footer {
+  display:flex; justify-content:space-between; align-items:center;
+  margin-top:12px; padding-top:12px; border-top:1px solid var(--border);
+}
+
+.job-date {
+  font-size:11px; color:var(--text-muted);
+  font-family:'DM Mono',monospace;
+}
+
+.job-apply-btn {
+  padding:8px 16px; background:var(--accent); color:var(--bg);
+  border:none; border-radius:8px; font-size:13px; font-weight:600;
+  cursor:pointer; text-decoration:none; transition:all 0.2s;
+}
+
+.job-apply-btn:hover {
+  background:var(--accent-dim);
+}
 
 .optimized-section {
   background:var(--surface); border:1px solid var(--border);
@@ -146,7 +193,7 @@ footer a:hover { text-decoration:underline; text-underline-offset:2px; }
   <div class="header-top">
     <div>
       <div class="logo">MORGAN <span>SEARCH</span></div>
-      <div class="tagline">Find jobs before the crowd</div>
+      <div class="tagline">One-stop job search solution</div>
     </div>
   </div>
   <div class="tabs">
@@ -181,7 +228,13 @@ footer a:hover { text-decoration:underline; text-underline-offset:2px; }
         <option value="seattle">Seattle</option>
       </select>
 
-      <button class="btn btn-primary" onclick="searchAIML()">Search All Platforms</button>
+      <button class="btn btn-primary" onclick="scrapeLinkedInJobs('aiml')">
+        Scrape LinkedIn Jobs
+      </button>
+      
+      <button class="btn btn-secondary" onclick="searchAllPlatforms('aiml')">
+        Search All Platforms (Google + ATS)
+      </button>
     </div>
 
     <div id="aiml-results" class="results"></div>
@@ -222,7 +275,13 @@ footer a:hover { text-decoration:underline; text-underline-offset:2px; }
         <option value="maryland">Maryland / DC</option>
       </select>
 
-      <button class="btn btn-primary" onclick="searchGMP()">Search Pharma Platforms</button>
+      <button class="btn btn-primary" onclick="scrapeLinkedInJobs('gmp')">
+        Scrape LinkedIn Jobs
+      </button>
+      
+      <button class="btn btn-secondary" onclick="searchAllPlatforms('gmp')">
+        Search Pharma Platforms (Google + ATS)
+      </button>
     </div>
 
     <div id="gmp-results" class="results"></div>
@@ -252,11 +311,11 @@ AI will extract technical skills, suggest similar job titles, and generate optim
 
 <footer>
   <div>Find jobs before the crowd</div>
-  <div style="margin-top:8px;">Powered by Google AI Studio. created by <href>github.com/SteveMama </href></div>
+  <div style="margin-top:8px;">Powered by Google AI Studio</div>
 </footer>
 
 <script>
-// AI/ML ATS Platforms
+// Platform configurations
 const AIML_PLATFORMS = {
   'Ashby': 'jobs.ashbyhq.com',
   'Greenhouse': 'boards.greenhouse.io',
@@ -265,11 +324,9 @@ const AIML_PLATFORMS = {
   'SmartRecruiters': 'jobs.smartrecruiters.com',
   'Workable': 'jobs.workable.com',
   'Wellfound': 'wellfound.com',
-  'YC Startups': 'workatastartup.com',
-  'LinkedIn': 'LINKEDIN'
+  'YC Startups': 'workatastartup.com'
 };
 
-// GMP/Pharma specific platforms
 const GMP_PLATFORMS = {
   'Workday': 'myworkdayjobs.com',
   'iCIMS': 'icims.com',
@@ -278,7 +335,6 @@ const GMP_PLATFORMS = {
   'SmartRecruiters': 'jobs.smartrecruiters.com',
   'BioSpace': 'jobs.biospace.com',
   'PharmiWeb': 'pharmiweb.jobs',
-  'LinkedIn': 'LINKEDIN',
   'ISPE Jobs': 'jobs.ispe.org',
   'PDA Careers': 'careers.pda.org'
 };
@@ -299,18 +355,18 @@ const AIML_LOCATIONS = {
   'usa': 'United States',
   'usa-remote': 'remote United States',
   'nyc': 'New York',
-  'sf': 'San Francisco OR "Bay Area"',
-  'boston': 'Boston OR Cambridge',
+  'sf': 'San Francisco',
+  'boston': 'Boston',
   'seattle': 'Seattle'
 };
 
 const GMP_LOCATIONS = {
   'usa': 'United States',
-  'nj-philly': 'New Jersey OR Philadelphia OR Raritan',
-  'research-triangle': 'Research Triangle OR Durham OR Raleigh OR "Holly Springs" OR Clayton',
-  'boston': 'Boston OR Cambridge OR Worcester OR Devens',
-  'houston': 'Houston OR Pearland',
-  'maryland': 'Maryland OR Frederick OR Rockville'
+  'nj-philly': 'New Jersey',
+  'research-triangle': 'Research Triangle',
+  'boston': 'Boston',
+  'houston': 'Houston',
+  'maryland': 'Maryland'
 };
 
 const GMP_ROLE_TITLES = {
@@ -329,7 +385,6 @@ function switchTab(tabName) {
   document.getElementById(`${tabName}-tab`).classList.add('active');
 }
 
-// Show/hide custom field for GMP
 document.addEventListener('DOMContentLoaded', () => {
   const roleSelect = document.getElementById('gmp-roleType');
   if (roleSelect) {
@@ -339,134 +394,146 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Enter key support
   document.getElementById('aiml-jobTitle').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') searchAIML();
+    if (e.key === 'Enter') scrapeLinkedInJobs('aiml');
   });
 });
 
-function buildLinkedInURL(jobTitle, location, timeFilter) {
-  const baseURL = 'https://www.linkedin.com/jobs/search/?';
-  const params = new URLSearchParams({
-    keywords: jobTitle,
-    location: location,
-    f_TPR: LINKEDIN_TIME[timeFilter] || 'r86400'
-  });
-  return baseURL + params.toString();
-}
+async function scrapeLinkedInJobs(tab) {
+  let keywords, location, timeFilter, resultsDiv;
+  
+  if (tab === 'aiml') {
+    keywords = document.getElementById('aiml-jobTitle').value.trim();
+    location = AIML_LOCATIONS[document.getElementById('aiml-locationFilter').value];
+    timeFilter = LINKEDIN_TIME[document.getElementById('aiml-timeFilter').value];
+    resultsDiv = document.getElementById('aiml-results');
+  } else {
+    const roleType = document.getElementById('gmp-roleType').value;
+    if (roleType === 'custom') {
+      keywords = document.getElementById('gmp-customTitle').value.trim();
+    } else {
+      keywords = GMP_ROLE_TITLES[roleType].split(' OR ')[0].replace(/"/g, '');
+    }
+    location = GMP_LOCATIONS[document.getElementById('gmp-locationFilter').value];
+    timeFilter = LINKEDIN_TIME[document.getElementById('gmp-timeFilter').value];
+    resultsDiv = document.getElementById('gmp-results');
+  }
 
-function searchAIML() {
-  const jobTitle = document.getElementById('aiml-jobTitle').value.trim();
-  const timeFilter = document.getElementById('aiml-timeFilter').value;
-  const location = document.getElementById('aiml-locationFilter').value;
-
-  if (!jobTitle) {
+  if (!keywords) {
     alert('Please enter a job title');
     return;
   }
 
-  const resultsDiv = document.getElementById('aiml-results');
-  resultsDiv.innerHTML = '';
+  resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div><div>Scraping LinkedIn jobs...</div></div>';
 
-  const timeParam = TIME_FILTERS[timeFilter] || '';
-  const locationQuery = AIML_LOCATIONS[location];
-  const timeLabel = timeFilter.replace('hours', ' Hours').replace('week', ' Week');
-
-  const header = document.createElement('h3');
-  header.textContent = `${jobTitle} — ${timeLabel}`;
-  resultsDiv.appendChild(header);
-
-  const list = document.createElement('ul');
-
-  Object.entries(AIML_PLATFORMS).forEach(([name, site]) => {
-    const li = document.createElement('li');
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.id = `aiml-${name.replace(/\s/g, '-')}`;
-    
-    const label = document.createElement('label');
-    label.htmlFor = checkbox.id;
-
-    let url;
-    if (site === 'LINKEDIN') {
-      url = buildLinkedInURL(jobTitle, locationQuery.replace(' OR ', ', '), timeFilter);
-    } else {
-      const googleQuery = `"${jobTitle}" ${locationQuery} site:${site}`;
-      url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}${timeParam}`;
-    }
-
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_blank';
-    link.textContent = name;
-
-    checkbox.addEventListener('click', () => window.open(url, '_blank'));
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      checkbox.checked = true;
-      window.open(url, '_blank');
+  try {
+    const response = await fetch('/api/scrape-linkedin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        keywords: keywords,
+        location: location,
+        time_filter: timeFilter,
+        max_results: 25
+      })
     });
 
-    label.appendChild(link);
-    li.appendChild(checkbox);
-    li.appendChild(label);
-    list.appendChild(li);
-  });
+    if (!response.ok) {
+      throw new Error('Failed to scrape LinkedIn');
+    }
 
-  resultsDiv.appendChild(list);
+    const data = await response.json();
+    displayJobCards(data.jobs, resultsDiv);
+
+  } catch (error) {
+    console.error('Error:', error);
+    resultsDiv.innerHTML = `<div class="notice" style="border-left-color:var(--danger);">
+      <strong>Error:</strong> ${error.message}<br><br>
+      LinkedIn scraping failed. This could be due to rate limiting or connection issues.<br>
+      Try using the "Search All Platforms" button instead, or wait a few minutes and try again.
+    </div>`;
+  }
 }
 
-function searchGMP() {
-  const roleType = document.getElementById('gmp-roleType').value;
-  const timeFilter = document.getElementById('gmp-timeFilter').value;
-  const location = document.getElementById('gmp-locationFilter').value;
-
-  let jobTitle;
-  if (roleType === 'custom') {
-    jobTitle = document.getElementById('gmp-customTitle').value.trim();
-    if (!jobTitle) {
-      alert('Please enter a custom job title');
-      return;
-    }
-  } else {
-    jobTitle = GMP_ROLE_TITLES[roleType];
+function displayJobCards(jobs, resultsDiv) {
+  if (!jobs || jobs.length === 0) {
+    resultsDiv.innerHTML = '<div class="notice">No jobs found. Try adjusting your search criteria or use the "Search All Platforms" button.</div>';
+    return;
   }
 
-  const resultsDiv = document.getElementById('gmp-results');
+  let html = `<h3>Found ${jobs.length} LinkedIn Jobs</h3><div class="job-cards">`;
+
+  jobs.forEach(job => {
+    html += `
+      <div class="job-card">
+        <div class="job-title">${job.title}</div>
+        <div class="job-company">${job.company}</div>
+        <div class="job-location">${job.location}</div>
+        <div class="job-footer">
+          <div class="job-date">${job.posted_date}</div>
+          <a href="${job.apply_link}" target="_blank" class="job-apply-btn">
+            Apply on LinkedIn
+          </a>
+        </div>
+      </div>
+    `;
+  });
+
+  html += '</div>';
+  resultsDiv.innerHTML = html;
+}
+
+function searchAllPlatforms(tab) {
+  let keywords, location, timeFilter, platforms, resultsDiv;
+  
+  if (tab === 'aiml') {
+    keywords = document.getElementById('aiml-jobTitle').value.trim();
+    location = AIML_LOCATIONS[document.getElementById('aiml-locationFilter').value];
+    timeFilter = document.getElementById('aiml-timeFilter').value;
+    platforms = AIML_PLATFORMS;
+    resultsDiv = document.getElementById('aiml-results');
+  } else {
+    const roleType = document.getElementById('gmp-roleType').value;
+    if (roleType === 'custom') {
+      keywords = document.getElementById('gmp-customTitle').value.trim();
+    } else {
+      keywords = GMP_ROLE_TITLES[roleType];
+    }
+    location = GMP_LOCATIONS[document.getElementById('gmp-locationFilter').value];
+    timeFilter = document.getElementById('gmp-timeFilter').value;
+    platforms = GMP_PLATFORMS;
+    resultsDiv = document.getElementById('gmp-results');
+  }
+
+  if (!keywords) {
+    alert('Please enter a job title');
+    return;
+  }
+
   resultsDiv.innerHTML = '';
 
   const timeParam = TIME_FILTERS[timeFilter] || '';
-  const locationQuery = GMP_LOCATIONS[location];
   const timeLabel = timeFilter.replace('hours', ' Hours').replace('week', ' Week');
 
   const header = document.createElement('h3');
-  const roleLabel = roleType === 'custom' ? jobTitle : roleType.replace(/-/g, ' ').toUpperCase();
-  header.textContent = `${roleLabel} — ${timeLabel}`;
+  header.textContent = `${keywords.split(' OR ')[0].replace(/"/g, '')} — ${timeLabel}`;
   resultsDiv.appendChild(header);
 
   const list = document.createElement('ul');
 
-  Object.entries(GMP_PLATFORMS).forEach(([name, site]) => {
+  Object.entries(platforms).forEach(([name, site]) => {
     const li = document.createElement('li');
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.id = `gmp-${name.replace(/\s/g, '-')}`;
+    checkbox.id = `${tab}-${name.replace(/\s/g, '-')}`;
     
     const label = document.createElement('label');
     label.htmlFor = checkbox.id;
 
-    let url;
-    if (site === 'LINKEDIN') {
-      // LinkedIn for GMP roles
-      const linkedinTitle = roleType === 'custom' ? jobTitle : roleType.replace(/-/g, ' ');
-      url = buildLinkedInURL(linkedinTitle, locationQuery.split(' OR ')[0], timeFilter);
-    } else {
-      // Google search for other platforms
-      const googleQuery = roleType === 'custom' 
-        ? `"${jobTitle}" GMP ${locationQuery} site:${site}`
-        : `(${jobTitle}) GMP ${locationQuery} site:${site}`;
-      url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}${timeParam}`;
-    }
+    const googleQuery = tab === 'gmp' && keywords.includes('OR')
+      ? `(${keywords}) GMP ${location} site:${site}`
+      : `"${keywords}" ${location} site:${site}`;
+    const url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}${timeParam}`;
 
     const link = document.createElement('a');
     link.href = url;
@@ -520,7 +587,6 @@ async function optimizeJobDescription() {
 
     resultsDiv.innerHTML = '';
 
-    // Keywords
     const keywordSection = document.createElement('div');
     keywordSection.className = 'optimized-section';
 
@@ -541,7 +607,6 @@ async function optimizeJobDescription() {
     keywordSection.appendChild(chipContainer);
     resultsDiv.appendChild(keywordSection);
 
-    // Determine if GMP/Pharma or AI/ML based on keywords
     const isGMP = data.keywords.some(k => 
       k.toLowerCase().includes('gmp') || 
       k.toLowerCase().includes('veeva') || 
@@ -551,7 +616,6 @@ async function optimizeJobDescription() {
 
     const platformsToUse = isGMP ? GMP_PLATFORMS : AIML_PLATFORMS;
 
-    // Job titles
     const titleSection = document.createElement('div');
     const titleHeader = document.createElement('h3');
     titleHeader.textContent = 'Suggested Job Titles';
@@ -577,16 +641,10 @@ async function optimizeJobDescription() {
       gridContainer.className = 'ats-grid';
 
       Object.entries(platformsToUse).forEach(([name, site]) => {
-        let url;
-        
-        if (site === 'LINKEDIN') {
-          url = buildLinkedInURL(title, 'United States', '24hours');
-        } else {
-          const googleQuery = isGMP 
-            ? `"${title}" GMP "United States" site:${site}`
-            : `"${title}" "United States" site:${site}`;
-          url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}&tbs=qdr:d`;
-        }
+        const googleQuery = isGMP 
+          ? `"${title}" GMP "United States" site:${site}`
+          : `"${title}" "United States" site:${site}`;
+        const url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}&tbs=qdr:d`;
 
         const link = document.createElement('a');
         link.href = url;
