@@ -10,405 +10,133 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #0a0e17;
-  --surface: #131a2b;
-  --surface-2: #1a2340;
-  --border: #243052;
-  --text: #e8ecf4;
-  --text-dim: #8892a8;
-  --text-muted: #556180;
-  --accent: #4de8b4;
-  --accent-dim: #2a8c6a;
-  --danger: #ff6b7a;
-  --warning: #ffb84d;
+  --bg: #0a0e17; --surface: #131a2b; --surface-2: #1a2340; --border: #243052;
+  --text: #e8ecf4; --text-dim: #8892a8; --text-muted: #556180;
+  --accent: #4de8b4; --accent-dim: #2a8c6a;
+  --danger: #ff6b7a; --warning: #ffb84d;
 }
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100dvh;
-  -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
-}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Plus Jakarta Sans',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100dvh; -webkit-font-smoothing:antialiased; }
 
 .header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: rgba(10, 14, 23, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border);
-  padding: 16px 20px 12px;
+  position:sticky; top:0; z-index:100;
+  background:rgba(10,14,23,0.85); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border); padding:16px 20px 12px;
 }
+.header-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.logo { font-family:'DM Mono',monospace; font-weight:500; font-size:15px; letter-spacing:0.08em; color:var(--accent); text-transform:uppercase; }
+.logo span { color:var(--text-dim); }
+.tagline { font-size:11px; color:var(--text-muted); margin-top:4px; font-family:'DM Mono',monospace; }
 
-.header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.logo {
-  font-family: 'DM Mono', monospace;
-  font-weight: 500;
-  font-size: 15px;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  text-transform: uppercase;
-}
-
-.logo span {
-  color: var(--text-dim);
-}
-
-.tagline {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 4px;
-}
-
-.tabs {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-}
-
+.tabs { display:flex; gap:8px; margin-top:12px; overflow-x:auto; }
 .tab {
-  padding: 8px 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text-dim);
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  -webkit-tap-highlight-color: transparent;
+  padding:8px 16px; border:1px solid var(--border); border-radius:8px;
+  background:var(--surface); color:var(--text-dim); font-size:13px; font-weight:600;
+  cursor:pointer; transition:all 0.2s; white-space:nowrap;
 }
+.tab.active { background:var(--accent); color:var(--bg); border-color:var(--accent); }
+.tab:active { transform:scale(0.97); }
 
-.tab.active {
-  background: var(--accent);
-  color: var(--bg);
-  border-color: var(--accent);
-}
-
-.tab:active {
-  transform: scale(0.97);
-}
-
-.container {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-.tab-content {
-  display: none;
-}
-
-.tab-content.active {
-  display: block;
-}
+.container { max-width:900px; margin:0 auto; padding:20px; }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
 
 .search-form {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 24px;
-  margin-bottom: 24px;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:14px; padding:24px; margin-bottom:24px;
 }
 
 label {
-  display: block;
-  font-family: 'DM Mono', monospace;
-  font-size: 11px;
-  color: var(--text-dim);
-  margin-bottom: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  display:block; font-family:'DM Mono',monospace; font-size:11px;
+  color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.05em;
 }
 
-input[type="text"],
-select,
-textarea {
-  width: 100%;
-  padding: 12px 14px;
-  margin-bottom: 18px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-2);
-  color: var(--text);
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 14px;
+input[type="text"], select, textarea {
+  width:100%; padding:12px 14px; margin-bottom:18px;
+  border:1px solid var(--border); border-radius:10px;
+  background:var(--surface-2); color:var(--text);
+  font-family:'Plus Jakarta Sans',sans-serif; font-size:14px;
 }
-
-input[type="text"]:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-textarea {
-  min-height: 180px;
-  resize: vertical;
-  line-height: 1.6;
-}
+input:focus, select:focus, textarea:focus { outline:none; border-color:var(--accent); }
+textarea { min-height:180px; resize:vertical; line-height:1.6; }
 
 .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 24px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--text);
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  -webkit-tap-highlight-color: transparent;
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding:12px 24px; border:1px solid var(--border); border-radius:10px;
+  background:var(--surface); color:var(--text); font-size:14px; font-weight:600;
+  cursor:pointer; transition:all 0.2s;
 }
+.btn-primary { background:var(--accent); color:var(--bg); border-color:var(--accent); width:100%; }
+.btn-primary:active { background:var(--accent-dim); transform:scale(0.98); }
+.btn:disabled { opacity:0.5; pointer-events:none; }
 
-.btn-primary {
-  background: var(--accent);
-  color: var(--bg);
-  border-color: var(--accent);
-  width: 100%;
-}
-
-.btn-primary:active {
-  background: var(--accent-dim);
-  transform: scale(0.98);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.results {
-  margin-top: 24px;
-}
-
-.results h3 {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 16px;
-  color: var(--text);
-}
-
-.results ul {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
+.results { margin-top:24px; }
+.results h3 { font-size:15px; font-weight:600; margin-bottom:16px; }
+.results ul { list-style:none; padding:0; display:flex; flex-direction:column; gap:8px; }
 .results li {
-  background: var(--surface);
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  background:var(--surface); padding:12px 14px; border-radius:10px;
+  border:1px solid var(--border); display:flex; align-items:center; gap:12px;
 }
-
-.results li input[type="checkbox"] {
-  cursor: pointer;
-  width: 16px;
-  height: 16px;
-}
-
-.results li label {
-  cursor: pointer;
-  margin: 0;
-  flex: 1;
-  text-transform: none;
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 14px;
-  letter-spacing: 0;
-}
-
-.results li a {
-  color: var(--text);
-  text-decoration: none;
-  transition: color 0.2s;
-}
-
-.results li a:hover {
-  color: var(--accent);
-}
+.results li input[type="checkbox"] { cursor:pointer; width:16px; height:16px; }
+.results li label { cursor:pointer; margin:0; flex:1; text-transform:none; font-size:14px; letter-spacing:0; }
+.results li a { color:var(--text); text-decoration:none; transition:color 0.2s; }
+.results li a:hover { color:var(--accent); }
 
 .notice {
-  background: var(--surface-2);
-  padding: 16px;
-  border-radius: 10px;
-  border-left: 3px solid var(--accent);
-  margin: 20px 0;
-  font-size: 13px;
-  line-height: 1.6;
+  background:var(--surface-2); padding:16px; border-radius:10px;
+  border-left:3px solid var(--accent); margin:20px 0; font-size:13px; line-height:1.6;
 }
+.notice strong { color:var(--accent); }
 
-.notice strong {
-  color: var(--accent);
-}
-
-.loading {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--text-dim);
-}
-
+.loading { text-align:center; padding:60px 20px; color:var(--text-dim); }
 .spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto 16px;
+  width:36px; height:36px; border:3px solid var(--border); border-top-color:var(--accent);
+  border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px;
 }
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform:rotate(360deg); } }
 
 .optimized-section {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 20px;
-  margin: 20px 0;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:14px; padding:20px; margin:20px 0;
 }
+.optimized-section h3 { font-size:15px; font-weight:600; margin-bottom:16px; color:var(--accent); }
 
-.optimized-section h3 {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 16px;
-  color: var(--accent);
-}
-
-.keyword-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
+.keyword-chips { display:flex; flex-wrap:wrap; gap:8px; }
 .chip {
-  display: inline-block;
-  padding: 6px 12px;
-  background: var(--accent);
-  color: var(--bg);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  font-family: 'DM Mono', monospace;
-}
-
-.job-title-section {
-  margin-top: 24px;
+  padding:6px 12px; background:var(--accent); color:var(--bg);
+  border-radius:6px; font-size:12px; font-weight:500; font-family:'DM Mono',monospace;
 }
 
 .job-title-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 20px;
-  margin-bottom: 16px;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:14px; padding:20px; margin-bottom:16px;
 }
-
-.job-title-card h4 {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: var(--text);
-}
-
-.job-title-card .subtitle {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 14px;
-}
+.job-title-card h4 { font-size:16px; font-weight:600; margin-bottom:12px; }
+.job-title-card .subtitle { font-size:12px; color:var(--text-muted); margin-bottom:14px; }
 
 .ats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 8px;
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:8px;
 }
-
 .ats-link {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 12px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-dim);
-  text-decoration: none;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.2s;
-  text-align: center;
+  display:flex; align-items:center; justify-content:center; padding:10px 12px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+  color:var(--text-dim); text-decoration:none; font-size:12px; font-weight:500;
+  transition:all 0.2s; text-align:center;
 }
-
-.ats-link:hover {
-  background: var(--border);
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.ats-link:active {
-  transform: scale(0.97);
-}
+.ats-link:hover { background:var(--border); color:var(--accent); border-color:var(--accent); }
+.ats-link:active { transform:scale(0.97); }
 
 footer {
-  text-align: center;
-  margin-top: 60px;
-  padding: 30px 20px;
-  border-top: 1px solid var(--border);
-  font-family: 'DM Mono', monospace;
-  font-size: 11px;
-  color: var(--text-muted);
+  text-align:center; margin-top:60px; padding:30px 20px; border-top:1px solid var(--border);
+  font-family:'DM Mono',monospace; font-size:11px; color:var(--text-muted);
 }
+footer a { color:var(--accent); text-decoration:none; }
+footer a:hover { text-decoration:underline; text-underline-offset:2px; }
 
-footer a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-footer a:hover {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-@media (min-width: 640px) {
-  .container {
-    padding: 32px 40px;
-  }
-
-  .search-form {
-    padding: 32px;
-  }
-
-  .ats-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  }
+@media (min-width:640px) {
+  .container { padding:32px 40px; }
+  .search-form { padding:32px; }
+  .ats-grid { grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); }
 }
 </style>
 </head>
@@ -418,66 +146,102 @@ footer a:hover {
   <div class="header-top">
     <div>
       <div class="logo">MORGAN <span>SEARCH</span></div>
-      <div class="tagline">AI-powered job discovery</div>
+      <div class="tagline">Find jobs before the crowd</div>
     </div>
   </div>
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('search')">Quick Search</button>
+    <button class="tab active" onclick="switchTab('aiml')">AI/ML Roles</button>
+    <button class="tab" onclick="switchTab('gmp')">GMP/Pharma QA</button>
     <button class="tab" onclick="switchTab('optimizer')">AI Optimizer</button>
   </div>
 </div>
 
 <div class="container">
-
-  <!-- TAB 1: QUICK SEARCH -->
-  <div id="search-tab" class="tab-content active">
+  
+  <!-- TAB 1: AI/ML JOBS -->
+  <div id="aiml-tab" class="tab-content active">
     <div class="search-form">
       <label>Job Title</label>
-      <input type="text" id="jobTitle" placeholder="e.g., Machine Learning Engineer" />
+      <input type="text" id="aiml-jobTitle" placeholder="e.g., Machine Learning Engineer, LLM Engineer" />
 
       <label>Time Range</label>
-      <select id="timeFilter">
+      <select id="aiml-timeFilter">
         <option value="24hours" selected>Past 24 Hours</option>
         <option value="48hours">Past 48 Hours</option>
-        <option value="72hours">Past 72 Hours</option>
         <option value="week">Past Week</option>
-        <option value="month">Past Month</option>
       </select>
 
       <label>Location</label>
-      <select id="locationFilter">
+      <select id="aiml-locationFilter">
         <option value="usa" selected>United States</option>
         <option value="usa-remote">USA - Remote Only</option>
         <option value="nyc">New York</option>
         <option value="sf">San Francisco / Bay Area</option>
         <option value="boston">Boston</option>
         <option value="seattle">Seattle</option>
-        <option value="austin">Austin</option>
       </select>
 
-      <button class="btn btn-primary" onclick="generateJobLinks()">Search All Platforms</button>
+      <button class="btn btn-primary" onclick="searchAIML()">Search All Platforms</button>
     </div>
 
-    <div id="searchResults" class="results"></div>
+    <div id="aiml-results" class="results"></div>
   </div>
 
-  <!-- TAB 2: AI OPTIMIZER -->
+  <!-- TAB 2: GMP/PHARMA QA JOBS -->
+  <div id="gmp-tab" class="tab-content">
+    <div class="search-form">
+      <label>Role Type</label>
+      <select id="gmp-roleType">
+        <option value="qa-associate">QA Associate (Manufacturing Floor)</option>
+        <option value="doc-control">Document Control Specialist</option>
+        <option value="compliance">Compliance/Audit Specialist</option>
+        <option value="qa-specialist">QA Specialist (General)</option>
+        <option value="batch-release">Batch Release Specialist</option>
+        <option value="custom">Custom Search</option>
+      </select>
+
+      <div id="gmp-custom-field" style="display:none;">
+        <label>Custom Job Title</label>
+        <input type="text" id="gmp-customTitle" placeholder="e.g., GMP Quality Specialist" />
+      </div>
+
+      <label>Time Range</label>
+      <select id="gmp-timeFilter">
+        <option value="24hours" selected>Past 24 Hours</option>
+        <option value="48hours">Past 48 Hours</option>
+        <option value="week">Past Week</option>
+      </select>
+
+      <label>Location</label>
+      <select id="gmp-locationFilter">
+        <option value="usa" selected>United States (All)</option>
+        <option value="nj-philly">NJ / Philadelphia</option>
+        <option value="research-triangle">Research Triangle, NC</option>
+        <option value="boston">Boston / Cambridge, MA</option>
+        <option value="houston">Houston, TX</option>
+        <option value="maryland">Maryland / DC</option>
+      </select>
+
+      <button class="btn btn-primary" onclick="searchGMP()">Search Pharma Platforms</button>
+    </div>
+
+    <div id="gmp-results" class="results"></div>
+  </div>
+
+  <!-- TAB 3: AI OPTIMIZER -->
   <div id="optimizer-tab" class="tab-content">
     <div class="search-form">
       <label>Job Description</label>
       <textarea id="jobDescription" placeholder="Paste the complete job description here...
 
-The AI will extract:
-- Technical skills and keywords
-- Similar job titles to search
-- Generate searches across all platforms"></textarea>
+AI will extract technical skills, suggest similar job titles, and generate optimized searches."></textarea>
 
       <button class="btn btn-primary" onclick="optimizeJobDescription()" id="optimizeBtn">
         Analyze with AI
       </button>
 
       <div class="notice">
-        <strong>How it works:</strong> AI analyzes the job description, extracts technical keywords, suggests similar job titles, then generates search links across 35+ job platforms.
+        <strong>How it works:</strong> AI analyzes the job description, extracts technical keywords and certifications, suggests similar job titles, then generates search links across all relevant platforms.
       </div>
     </div>
 
@@ -488,128 +252,232 @@ The AI will extract:
 
 <footer>
   <div>Find jobs before the crowd</div>
-  <div style="margin-top: 8px;">Powered by Google AI Studio / Gemini 2.5 Flash</div>
-  <div style="margin-top: 12px;"><a href="https://github.com/yourusername/morgan" target="_blank">View on GitHub</a></div>
+  <div style="margin-top:8px;">Powered by Google AI Studio. created by <href>github.com/SteveMama </href></div>
 </footer>
 
 <script>
-const ATS_PLATFORMS = {
+// AI/ML ATS Platforms
+const AIML_PLATFORMS = {
   'Ashby': 'jobs.ashbyhq.com',
   'Greenhouse': 'boards.greenhouse.io',
   'Lever': 'jobs.lever.co',
   'Workday': 'myworkdayjobs.com',
   'SmartRecruiters': 'jobs.smartrecruiters.com',
   'Workable': 'jobs.workable.com',
-  'iCIMS': 'icims.com',
-  'Jobvite': 'jobvite.com',
-  'Dover': 'dover.io',
-  'Pinpoint': 'pinpointhq.com',
-  'BreezyHR': 'breezy.hr',
   'Wellfound': 'wellfound.com',
   'YC Startups': 'workatastartup.com',
-  'Recruitee': 'recruitee.com',
-  'Gusto': 'jobs.gusto.com',
-  'Teamtailor': 'teamtailor.com',
-  'Homerun': 'homerun.co',
-  'JazzHR': 'applytojob.com',
-  'Paylocity': 'recruiting.paylocity.com',
-  'Oracle Cloud': 'oraclecloud.com',
-  'Keka': 'keka.com',
-  'CareerPuck': 'careerpuck.com',
-  'TalentReef': 'jobappnetwork.com',
-  'Gem': 'gem.com',
-  'Trakstar': 'trakstar.com',
-  'Cats': 'catsone.com',
-  'ADP': 'workforcenow.adp.com OR site:myjobs.adp.com',
-  'Rippling': 'rippling',
-  'Notion': 'notion.site',
-  'Builtin': 'builtin.com/job/',
-  'Factorial': 'factorialhr.com',
-  'TriNet': 'trinethire.com',
-  'Jobs Subdomain': 'site:jobs.*',
-  'Careers Pages': 'site:careers.* OR site:*/careers/*',
-  'Employment Pages': 'site:*/employment/* OR site:*/opportunities/*'
+  'LinkedIn': 'LINKEDIN'
+};
+
+// GMP/Pharma specific platforms
+const GMP_PLATFORMS = {
+  'Workday': 'myworkdayjobs.com',
+  'iCIMS': 'icims.com',
+  'Taleo': 'taleo.net',
+  'SAP SuccessFactors': 'successfactors.com',
+  'SmartRecruiters': 'jobs.smartrecruiters.com',
+  'BioSpace': 'jobs.biospace.com',
+  'PharmiWeb': 'pharmiweb.jobs',
+  'LinkedIn': 'LINKEDIN',
+  'ISPE Jobs': 'jobs.ispe.org',
+  'PDA Careers': 'careers.pda.org'
 };
 
 const TIME_FILTERS = {
   '24hours': '&tbs=qdr:d',
   '48hours': '&tbs=qdr:h48',
-  '72hours': '&tbs=qdr:h72',
-  'week': '&tbs=qdr:w',
-  'month': '&tbs=qdr:m'
+  'week': '&tbs=qdr:w'
 };
 
-const LOCATIONS = {
+const LINKEDIN_TIME = {
+  '24hours': 'r86400',
+  '48hours': 'r172800',
+  'week': 'r604800'
+};
+
+const AIML_LOCATIONS = {
   'usa': 'United States',
   'usa-remote': 'remote United States',
   'nyc': 'New York',
   'sf': 'San Francisco OR "Bay Area"',
   'boston': 'Boston OR Cambridge',
-  'seattle': 'Seattle',
-  'austin': 'Austin'
+  'seattle': 'Seattle'
+};
+
+const GMP_LOCATIONS = {
+  'usa': 'United States',
+  'nj-philly': 'New Jersey OR Philadelphia OR Raritan',
+  'research-triangle': 'Research Triangle OR Durham OR Raleigh OR "Holly Springs" OR Clayton',
+  'boston': 'Boston OR Cambridge OR Worcester OR Devens',
+  'houston': 'Houston OR Pearland',
+  'maryland': 'Maryland OR Frederick OR Rockville'
+};
+
+const GMP_ROLE_TITLES = {
+  'qa-associate': 'QA Associate OR "Quality Associate" OR "QA Shop Floor" OR "Quality Operations"',
+  'doc-control': '"Document Control Specialist" OR "QA Documentation" OR "Batch Record"',
+  'compliance': '"Compliance Specialist" OR "Quality Auditor" OR "Audit Specialist"',
+  'qa-specialist': '"QA Specialist" OR "Quality Assurance Specialist"',
+  'batch-release': '"Batch Release" OR "Batch Disposition" OR "Product Release"',
+  'custom': ''
 };
 
 function switchTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
   event.target.classList.add('active');
   document.getElementById(`${tabName}-tab`).classList.add('active');
 }
 
-function generateJobLinks() {
-  const jobTitle = document.getElementById('jobTitle').value.trim();
-  const timeFilter = document.getElementById('timeFilter').value;
-  const location = document.getElementById('locationFilter').value;
+// Show/hide custom field for GMP
+document.addEventListener('DOMContentLoaded', () => {
+  const roleSelect = document.getElementById('gmp-roleType');
+  if (roleSelect) {
+    roleSelect.addEventListener('change', () => {
+      const customField = document.getElementById('gmp-custom-field');
+      customField.style.display = roleSelect.value === 'custom' ? 'block' : 'none';
+    });
+  }
+  
+  // Enter key support
+  document.getElementById('aiml-jobTitle').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') searchAIML();
+  });
+});
+
+function buildLinkedInURL(jobTitle, location, timeFilter) {
+  const baseURL = 'https://www.linkedin.com/jobs/search/?';
+  const params = new URLSearchParams({
+    keywords: jobTitle,
+    location: location,
+    f_TPR: LINKEDIN_TIME[timeFilter] || 'r86400'
+  });
+  return baseURL + params.toString();
+}
+
+function searchAIML() {
+  const jobTitle = document.getElementById('aiml-jobTitle').value.trim();
+  const timeFilter = document.getElementById('aiml-timeFilter').value;
+  const location = document.getElementById('aiml-locationFilter').value;
 
   if (!jobTitle) {
     alert('Please enter a job title');
     return;
   }
 
-  const resultsDiv = document.getElementById('searchResults');
+  const resultsDiv = document.getElementById('aiml-results');
   resultsDiv.innerHTML = '';
 
   const timeParam = TIME_FILTERS[timeFilter] || '';
-  const locationQuery = LOCATIONS[location];
+  const locationQuery = AIML_LOCATIONS[location];
+  const timeLabel = timeFilter.replace('hours', ' Hours').replace('week', ' Week');
 
   const header = document.createElement('h3');
-  const timeLabel = timeFilter.replace('hours', ' Hours').replace('week', ' Week').replace('month', ' Month');
   header.textContent = `${jobTitle} — ${timeLabel}`;
   resultsDiv.appendChild(header);
 
   const list = document.createElement('ul');
 
-  Object.entries(ATS_PLATFORMS).forEach(([name, site]) => {
+  Object.entries(AIML_PLATFORMS).forEach(([name, site]) => {
     const li = document.createElement('li');
-
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.id = `${name.replace(/\s/g, '-')}-check`;
-
+    checkbox.id = `aiml-${name.replace(/\s/g, '-')}`;
+    
     const label = document.createElement('label');
     label.htmlFor = checkbox.id;
 
-    let googleQuery;
-    if (site.includes('OR')) {
-      googleQuery = `"${jobTitle}" ${locationQuery} (site:${site})`;
+    let url;
+    if (site === 'LINKEDIN') {
+      url = buildLinkedInURL(jobTitle, locationQuery.replace(' OR ', ', '), timeFilter);
     } else {
-      googleQuery = `"${jobTitle}" ${locationQuery} site:${site}`;
+      const googleQuery = `"${jobTitle}" ${locationQuery} site:${site}`;
+      url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}${timeParam}`;
     }
 
-    const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}${timeParam}`;
-
     const link = document.createElement('a');
-    link.href = googleUrl;
+    link.href = url;
     link.target = '_blank';
-    link.rel = 'noopener noreferrer';
     link.textContent = name;
 
-    checkbox.addEventListener('click', () => window.open(googleUrl, '_blank'));
+    checkbox.addEventListener('click', () => window.open(url, '_blank'));
     link.addEventListener('click', (e) => {
       e.preventDefault();
       checkbox.checked = true;
-      window.open(googleUrl, '_blank');
+      window.open(url, '_blank');
+    });
+
+    label.appendChild(link);
+    li.appendChild(checkbox);
+    li.appendChild(label);
+    list.appendChild(li);
+  });
+
+  resultsDiv.appendChild(list);
+}
+
+function searchGMP() {
+  const roleType = document.getElementById('gmp-roleType').value;
+  const timeFilter = document.getElementById('gmp-timeFilter').value;
+  const location = document.getElementById('gmp-locationFilter').value;
+
+  let jobTitle;
+  if (roleType === 'custom') {
+    jobTitle = document.getElementById('gmp-customTitle').value.trim();
+    if (!jobTitle) {
+      alert('Please enter a custom job title');
+      return;
+    }
+  } else {
+    jobTitle = GMP_ROLE_TITLES[roleType];
+  }
+
+  const resultsDiv = document.getElementById('gmp-results');
+  resultsDiv.innerHTML = '';
+
+  const timeParam = TIME_FILTERS[timeFilter] || '';
+  const locationQuery = GMP_LOCATIONS[location];
+  const timeLabel = timeFilter.replace('hours', ' Hours').replace('week', ' Week');
+
+  const header = document.createElement('h3');
+  const roleLabel = roleType === 'custom' ? jobTitle : roleType.replace(/-/g, ' ').toUpperCase();
+  header.textContent = `${roleLabel} — ${timeLabel}`;
+  resultsDiv.appendChild(header);
+
+  const list = document.createElement('ul');
+
+  Object.entries(GMP_PLATFORMS).forEach(([name, site]) => {
+    const li = document.createElement('li');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `gmp-${name.replace(/\s/g, '-')}`;
+    
+    const label = document.createElement('label');
+    label.htmlFor = checkbox.id;
+
+    let url;
+    if (site === 'LINKEDIN') {
+      // LinkedIn for GMP roles
+      const linkedinTitle = roleType === 'custom' ? jobTitle : roleType.replace(/-/g, ' ');
+      url = buildLinkedInURL(linkedinTitle, locationQuery.split(' OR ')[0], timeFilter);
+    } else {
+      // Google search for other platforms
+      const googleQuery = roleType === 'custom' 
+        ? `"${jobTitle}" GMP ${locationQuery} site:${site}`
+        : `(${jobTitle}) GMP ${locationQuery} site:${site}`;
+      url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}${timeParam}`;
+    }
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.textContent = name;
+
+    checkbox.addEventListener('click', () => window.open(url, '_blank'));
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      checkbox.checked = true;
+      window.open(url, '_blank');
     });
 
     label.appendChild(link);
@@ -642,9 +510,7 @@ async function optimizeJobDescription() {
       body: JSON.stringify({ jobDescription: jd })
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const data = await response.json();
 
@@ -654,7 +520,7 @@ async function optimizeJobDescription() {
 
     resultsDiv.innerHTML = '';
 
-    // Keywords section
+    // Keywords
     const keywordSection = document.createElement('div');
     keywordSection.className = 'optimized-section';
 
@@ -675,10 +541,18 @@ async function optimizeJobDescription() {
     keywordSection.appendChild(chipContainer);
     resultsDiv.appendChild(keywordSection);
 
-    // Job titles section
-    const titleSection = document.createElement('div');
-    titleSection.className = 'job-title-section';
+    // Determine if GMP/Pharma or AI/ML based on keywords
+    const isGMP = data.keywords.some(k => 
+      k.toLowerCase().includes('gmp') || 
+      k.toLowerCase().includes('veeva') || 
+      k.toLowerCase().includes('batch') ||
+      k.toLowerCase().includes('compliance')
+    );
 
+    const platformsToUse = isGMP ? GMP_PLATFORMS : AIML_PLATFORMS;
+
+    // Job titles
+    const titleSection = document.createElement('div');
     const titleHeader = document.createElement('h3');
     titleHeader.textContent = 'Suggested Job Titles';
     titleHeader.style.fontSize = '15px';
@@ -696,24 +570,26 @@ async function optimizeJobDescription() {
 
       const subtitle = document.createElement('div');
       subtitle.className = 'subtitle';
-      subtitle.textContent = 'Click any platform to search (24 hours, USA)';
+      subtitle.textContent = `Click any platform to search (24 hours, USA) — ${isGMP ? 'Pharma' : 'Tech'} platforms`;
       card.appendChild(subtitle);
 
       const gridContainer = document.createElement('div');
       gridContainer.className = 'ats-grid';
 
-      Object.entries(ATS_PLATFORMS).forEach(([name, site]) => {
-        let googleQuery;
-        if (site.includes('OR')) {
-          googleQuery = `"${title}" "United States" (site:${site})`;
+      Object.entries(platformsToUse).forEach(([name, site]) => {
+        let url;
+        
+        if (site === 'LINKEDIN') {
+          url = buildLinkedInURL(title, 'United States', '24hours');
         } else {
-          googleQuery = `"${title}" "United States" site:${site}`;
+          const googleQuery = isGMP 
+            ? `"${title}" GMP "United States" site:${site}`
+            : `"${title}" "United States" site:${site}`;
+          url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}&tbs=qdr:d`;
         }
 
-        const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}&tbs=qdr:d`;
-
         const link = document.createElement('a');
-        link.href = googleUrl;
+        link.href = url;
         link.target = '_blank';
         link.className = 'ats-link';
         link.textContent = name;
@@ -728,7 +604,7 @@ async function optimizeJobDescription() {
 
   } catch (error) {
     console.error('Error:', error);
-    resultsDiv.innerHTML = `<div class="notice" style="border-left-color: var(--danger);">
+    resultsDiv.innerHTML = `<div class="notice" style="border-left-color:var(--danger);">
       <strong>Error:</strong> ${error.message}<br><br>
       Make sure Flask is running: <code>python app.py</code>
     </div>`;
@@ -737,12 +613,6 @@ async function optimizeJobDescription() {
     btn.textContent = 'Analyze with AI';
   }
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('jobTitle').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') generateJobLinks();
-  });
-});
 </script>
 </body>
 </html>
