@@ -239,10 +239,11 @@ footer a:hover { text-decoration:underline; text-underline-offset:2px; }
 
       <label>Number of Jobs</label>
       <select id="aiml-jobCount">
-        <option value="10" selected>10 jobs</option>
-        <option value="15">15 jobs</option>
-        <option value="20">20 jobs</option>
-        <option value="25">25 jobs</option>
+        <option value="10">10 jobs</option>
+        <option value="25" selected>25 jobs</option>
+        <option value="50">50 jobs</option>
+        <option value="75">75 jobs</option>
+        <option value="100">100 jobs</option>
       </select>
 
       <label>Time Range</label>
@@ -294,10 +295,11 @@ footer a:hover { text-decoration:underline; text-underline-offset:2px; }
 
       <label>Number of Jobs</label>
       <select id="gmp-jobCount">
-        <option value="10" selected>10 jobs</option>
-        <option value="15">15 jobs</option>
-        <option value="20">20 jobs</option>
-        <option value="25">25 jobs</option>
+        <option value="10">10 jobs</option>
+        <option value="25" selected>25 jobs</option>
+        <option value="50">50 jobs</option>
+        <option value="75">75 jobs</option>
+        <option value="100">100 jobs</option>
       </select>
 
       <label>Time Range</label>
@@ -485,7 +487,14 @@ async function scrapeLinkedInJobs(tab) {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to scrape LinkedIn');
+      const errorData = await response.json().catch(() => ({}));
+      
+      // Check if it's the Vercel limitation
+      if (response.status === 503 && errorData.is_vercel) {
+        throw new Error('LinkedIn scraping not available on this platform');
+      }
+      
+      throw new Error(errorData.message || 'Failed to scrape LinkedIn');
     }
 
     const data = await response.json();
@@ -493,11 +502,23 @@ async function scrapeLinkedInJobs(tab) {
 
   } catch (error) {
     console.error('Error:', error);
-    resultsDiv.innerHTML = `<div class="notice" style="border-left-color:var(--danger);">
-      <strong>Error:</strong> ${error.message}<br><br>
-      LinkedIn scraping failed. This could be due to rate limiting or connection issues.<br>
-      Try using the "Search All Platforms" button instead, or wait a few minutes and try again.
-    </div>`;
+    
+    // Check if it's a Vercel limitation error
+    if (error.message && error.message.includes('not available')) {
+      resultsDiv.innerHTML = `<div class="notice" style="border-left-color:#ffb84d;">
+        <strong>LinkedIn Scraping Not Available</strong><br><br>
+        LinkedIn scraping requires 2-5 minutes to fetch detailed job information, but this deployment platform has strict timeout limits.<br><br>
+        <strong>Available Options:</strong><br>
+        1. Use the "Search All Platforms" button below to search LinkedIn via Google<br>
+        2. Run this application locally for full LinkedIn scraping: <code>python app.py</code>
+      </div>`;
+    } else {
+      resultsDiv.innerHTML = `<div class="notice" style="border-left-color:var(--danger);">
+        <strong>Error:</strong> ${error.message}<br><br>
+        LinkedIn scraping failed. This could be due to rate limiting or connection issues.<br>
+        Try using the "Search All Platforms" button instead, or wait a few minutes and try again.
+      </div>`;
+    }
   }
 }
 

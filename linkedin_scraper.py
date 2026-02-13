@@ -21,13 +21,13 @@ class LinkedInJobScraper:
         
     def search_jobs(self, keywords, location='United States', time_filter='r86400', max_results=25, fetch_details=True):
         """
-        Search LinkedIn jobs using public job search
+        Search LinkedIn jobs using public job search with pagination support
         
         Args:
             keywords: Job search keywords
             location: Location string
             time_filter: r86400 (24h), r172800 (48h), r604800 (week)
-            max_results: Max jobs to return
+            max_results: Max jobs to return (will paginate if needed)
             fetch_details: If True, fetch full job page for each result (slower but more data)
             
         Returns:
@@ -36,48 +36,77 @@ class LinkedInJobScraper:
         
         base_url = 'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search'
         
-        params = {
-            'keywords': keywords,
-            'location': location,
-            'f_TPR': time_filter,
-            'start': 0
-        }
-        
         jobs = []
+        start = 0
+        page_size = 25  # LinkedIn returns ~25 jobs per page
         
         try:
-            url = f"{base_url}?{urlencode(params)}"
-            print(f"Fetching: {url}")
+            # Calculate how many pages we need
+            pages_needed = (max_results + page_size - 1) // page_size  # Ceiling division
             
-            response = self.session.get(url, timeout=10)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Find all job cards
-            job_cards = soup.find_all('li')
-            
-            print(f"Found {len(job_cards)} job listings")
-            
-            for idx, card in enumerate(job_cards[:max_results]):
-                job_data = self._extract_job_data(card)
-                if job_data:
-                    # Fetch full details if requested
-                    if fetch_details and job_data.get('job_id'):
-                        print(f"Fetching details for job {idx+1}/{min(len(job_cards), max_results)}: {job_data['title']}")
-                        full_details = self._fetch_job_details(job_data['job_id'])
-                        if full_details:
-                            job_data.update(full_details)
-                        time.sleep(random.uniform(1.5, 2.5))
-                    
-                    jobs.append(job_data)
+            for page in range(pages_needed):
+                params = {
+                    'keywords': keywords,
+                    'location': location,
+                    'f_TPR': time_filter,
+                    'start': start
+                }
+                
+                url = f"{base_url}?{urlencode(params)}"
+                print(f"Fetching page {page + 1}/{pages_needed}: {url}")
+                
+                response = self.session.get(url, timeout=10)
+                response.raise_for_status()
+                
+                soup = BeautifulSoup(response.content, 'html.parser')
+                
+                # Find all job cards
+                job_cards = soup.find_all('li')
+                
+                print(f"Found {len(job_cards)} job listings on page {page + 1}")
+                
+                if len(job_cards) == 0:
+                    print("No more jobs found, stopping pagination")
+                    break
+                
+                # Process jobs from this page
+                jobs_processed = 0
+                for idx, card in enumerate(job_cards):
+                    if len(jobs) >= max_results:
+                        break
+                        
+                    job_data = self._extract_job_data(card)
+                    if job_data:
+                        # Fetch full details if requested
+                        if fetch_details and job_data.get('job_id'):
+                            job_num = len(jobs) + 1
+                            print(f"Fetching details for job {job_num}/{max_results}: {job_data['title']}")
+                            full_details = self._fetch_job_details(job_data['job_id'])
+                            if full_details:
+                                job_data.update(full_details)
+                            time.sleep(random.uniform(1.5, 2.5))
+                        
+                        jobs.append(job_data)
+                        jobs_processed += 1
+                
+                print(f"Processed {jobs_processed} jobs from page {page + 1}")
+                
+                # Break if we have enough jobs
+                if len(jobs) >= max_results:
+                    break
+                
+                # Move to next page
+                start += page_size
+                
+                # Small delay between pages
+                time.sleep(random.uniform(1, 2))
             
         except requests.exceptions.RequestException as e:
             print(f"Request error: {e}")
         except Exception as e:
             print(f"Error: {e}")
             
-        return jobs
+        return jobs[:max_results]  # Ensure we don't return more than requested
     
     def _extract_job_data(self, card):
         """Extract basic job details from job card"""
@@ -169,7 +198,7 @@ class LinkedInJobScraper:
             desc_elem = soup.find('div', class_='show-more-less-html__markup')
             if desc_elem:
                 details['description'] = desc_elem.get_text(strip=True, separator='\n')
-                print(f"  ✓ Found description ({len(details['description'])} chars)")
+                print(f"  [OK] Found description ({len(details['description'])} chars)")
             
             # Extract apply link - look for external apply URL
             apply_link = None
@@ -178,7 +207,7 @@ class LinkedInJobScraper:
             apply_button = soup.find('a', {'data-tracking-control-name': 'public_jobs_apply-link-offsite'})
             if apply_button and apply_button.get('href'):
                 apply_link = apply_button['href']
-                print(f"  ✓ Found external apply link: {apply_link[:60]}...")
+                print(f"  [OK] Found external apply link: {apply_link[:60]}...")
             
             # Method 2: Look in the page source for applyUrl
             if not apply_link:
@@ -192,7 +221,7 @@ class LinkedInJobScraper:
                                 # Has external apply
                                 apply_link = data.get('url', data.get('applicationUrl'))
                                 if apply_link:
-                                    print(f"  ✓ Found apply link in JSON-LD: {apply_link[:60]}...")
+                                    print(f"  [OK] Found apply link in JSON-LD: {apply_link[:60]}...")
                     except:
                         pass
             
@@ -205,12 +234,12 @@ class LinkedInJobScraper:
                         matches = re.findall(r'"applyUrl":"([^"]+)"', rehydrate_script.string)
                         if matches:
                             apply_link = matches[0].replace('\\/', '/')
-                            print(f"  ✓ Found apply link in rehydration data: {apply_link[:60]}...")
+                            print(f"  [OK] Found apply link in rehydration data: {apply_link[:60]}...")
                     except:
                         pass
             
             if not apply_link:
-                print(f"  ℹ No external apply link found, using LinkedIn Easy Apply")
+                print(f"  [INFO] No external apply link found, using LinkedIn Easy Apply")
             
             details['external_apply_url'] = apply_link
             details['apply_type'] = 'external' if apply_link else 'linkedin_easy_apply'
@@ -227,10 +256,10 @@ class LinkedInJobScraper:
                     
                     if 'seniority' in label:
                         details['seniority_level'] = value
-                        print(f"  ✓ Seniority: {value}")
+                        print(f"  [OK] Seniority: {value}")
                     elif 'employment type' in label:
                         details['employment_type'] = value
-                        print(f"  ✓ Employment type: {value}")
+                        print(f"  [OK] Employment type: {value}")
                     elif 'job function' in label:
                         details['job_function'] = value
                     elif 'industries' in label:
@@ -242,15 +271,15 @@ class LinkedInJobScraper:
                 posted_text = posted_elem.text.strip()
                 details['posted_ago'] = posted_text
                 details['posted_date_formatted'] = self._parse_posted_date(posted_text)
-                print(f"  ✓ Posted: {posted_text}")
+                print(f"  [OK] Posted: {posted_text}")
             
             return details
             
         except requests.exceptions.HTTPError as e:
-            print(f"  ✗ HTTP Error: {e.response.status_code} - {e}")
+            print(f"  [ERROR] HTTP Error: {e.response.status_code} - {e}")
             return None
         except Exception as e:
-            print(f"  ✗ Error fetching job details: {e}")
+            print(f"  [ERROR] Error fetching job details: {e}")
             return None
     
     def _parse_posted_date(self, posted_text):

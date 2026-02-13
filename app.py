@@ -122,36 +122,19 @@ def scrape_linkedin():
     """
     Scrape LinkedIn jobs and return actual job listings with full details
     
-    Request body:
-    {
-        "keywords": "Machine Learning Engineer",
-        "location": "San Francisco",
-        "time_filter": "r86400",
-        "max_results": 25,
-        "fetch_details": true  (optional, default true)
-    }
-    
-    Returns:
-    {
-        "jobs": [
-            {
-                "job_id": "123456",
-                "title": "ML Engineer",
-                "company": "Company Name",
-                "location": "San Francisco, CA",
-                "linkedin_url": "https://linkedin.com/jobs/view/123456",
-                "external_apply_url": "https://company.com/apply" (if available),
-                "apply_type": "external" or "linkedin_easy_apply",
-                "posted_date": "2026-02-12",
-                "posted_ago": "Posted 2 days ago",
-                "employment_type": "Full-time",
-                "seniority_level": "Mid-Senior level",
-                "description": "Full job description text...",
-                "salary": "$150k-$200k" (if available)
-            }
-        ]
-    }
+    Note: This feature is disabled on Vercel due to timeout limitations.
     """
+    
+    # Check if running on Vercel
+    is_vercel = os.getenv('VERCEL') or os.getenv('VERCEL_ENV')
+    
+    if is_vercel:
+        return jsonify({
+            'error': 'LinkedIn scraping not available on Vercel',
+            'message': 'LinkedIn scraping requires 2-5 minutes to fetch job details, but Vercel has a 10-second timeout limit. Please use the "Search All Platforms" button instead, or run this application locally for full LinkedIn scraping functionality.',
+            'alternative': 'Use the "Search All Platforms" button to search LinkedIn via Google',
+            'is_vercel': True
+        }), 503  # Service Unavailable
     
     data = request.json
     keywords = data.get('keywords', '')
@@ -163,10 +146,31 @@ def scrape_linkedin():
     if not keywords:
         return jsonify({'error': 'Keywords required'}), 400
     
-    # Cap at 25 to prevent extreme timeouts
-    max_results = min(max_results, 25)
+    # Cap at 100 jobs (with pagination, this is reasonable)
+    max_results = min(max_results, 100)
     
     try:
+        jobs = linkedin_scraper.search_jobs(
+            keywords=keywords,
+            location=location,
+            time_filter=time_filter,
+            max_results=max_results,
+            fetch_details=fetch_details
+        )
+        
+        return jsonify({
+            'jobs': jobs,
+            'count': len(jobs),
+            'has_full_details': fetch_details
+        })
+    
+    except Exception as e:
+        print(f"LinkedIn scraping error: {e}")
+        return jsonify({
+            'error': 'Failed to scrape LinkedIn',
+            'message': str(e)
+        }), 500
+
         jobs = linkedin_scraper.search_jobs(
             keywords=keywords,
             location=location,
