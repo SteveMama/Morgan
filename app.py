@@ -122,32 +122,28 @@ def scrape_linkedin():
     """
     Scrape LinkedIn jobs and return actual job listings with full details
     
-    Note: This feature is disabled on Vercel due to timeout limitations.
+    Note: On Vercel, we disable fetch_details to stay within timeout limits
     """
-    
-    # Check if running on Vercel
-    is_vercel = os.getenv('VERCEL') or os.getenv('VERCEL_ENV')
-    
-    if is_vercel:
-        return jsonify({
-            'error': 'LinkedIn scraping not available on Vercel',
-            'message': 'LinkedIn scraping requires 2-5 minutes to fetch job details, but Vercel has a 10-second timeout limit. Please use the "Search All Platforms" button instead, or run this application locally for full LinkedIn scraping functionality.',
-            'alternative': 'Use the "Search All Platforms" button to search LinkedIn via Google',
-            'is_vercel': True
-        }), 503  # Service Unavailable
     
     data = request.json
     keywords = data.get('keywords', '')
     location = data.get('location', 'United States')
     time_filter = data.get('time_filter', 'r86400')
     max_results = data.get('max_results', 10)
-    fetch_details = data.get('fetch_details', True)  # Default to fetching full details
+    fetch_details = data.get('fetch_details', True)
     
     if not keywords:
         return jsonify({'error': 'Keywords required'}), 400
     
-    # Cap at 100 jobs (with pagination, this is reasonable)
-    max_results = min(max_results, 100)
+    # Check if running on Vercel - disable fetch_details to avoid timeout
+    is_vercel = os.getenv('VERCEL') or os.getenv('VERCEL_ENV')
+    if is_vercel:
+        fetch_details = False  # Disable detailed fetching on Vercel
+        max_results = min(max_results, 25)  # Limit to 25 jobs max
+        print("Running on Vercel - fetch_details disabled to avoid timeout")
+    else:
+        # Cap at 100 jobs for local runs
+        max_results = min(max_results, 100)
     
     try:
         jobs = linkedin_scraper.search_jobs(
@@ -161,7 +157,8 @@ def scrape_linkedin():
         return jsonify({
             'jobs': jobs,
             'count': len(jobs),
-            'has_full_details': fetch_details
+            'has_full_details': fetch_details,
+            'is_vercel': bool(is_vercel)
         })
     
     except Exception as e:

@@ -498,27 +498,22 @@ async function scrapeLinkedInJobs(tab) {
     }
 
     const data = await response.json();
+    
+    // Check if running on Vercel with limited details
+    if (data.is_vercel && !data.has_full_details) {
+      console.log("Running on Vercel - basic job info only");
+    }
+    
     displayJobCards(data.jobs, resultsDiv, tab, keywords, location, timeFilter);
 
   } catch (error) {
     console.error('Error:', error);
     
-    // Check if it's a Vercel limitation error
-    if (error.message && error.message.includes('not available')) {
-      resultsDiv.innerHTML = `<div class="notice" style="border-left-color:#ffb84d;">
-        <strong>LinkedIn Scraping Not Available</strong><br><br>
-        LinkedIn scraping requires 2-5 minutes to fetch detailed job information, but this deployment platform has strict timeout limits.<br><br>
-        <strong>Available Options:</strong><br>
-        1. Use the "Search All Platforms" button below to search LinkedIn via Google<br>
-        2. Run this application locally for full LinkedIn scraping: <code>python app.py</code>
-      </div>`;
-    } else {
-      resultsDiv.innerHTML = `<div class="notice" style="border-left-color:var(--danger);">
-        <strong>Error:</strong> ${error.message}<br><br>
-        LinkedIn scraping failed. This could be due to rate limiting or connection issues.<br>
-        Try using the "Search All Platforms" button instead, or wait a few minutes and try again.
-      </div>`;
-    }
+    resultsDiv.innerHTML = `<div class="notice" style="border-left-color:var(--danger);">
+      <strong>Error:</strong> ${error.message}<br><br>
+      LinkedIn scraping failed. This could be due to rate limiting or connection issues.<br>
+      Try using the "Search All Platforms" button instead, or wait a few minutes and try again.
+    </div>`;
   }
 }
 
@@ -531,6 +526,7 @@ function displayJobCards(jobs, resultsDiv, tab, keywords, location, timeFilter) 
   // Count job types
   const externalCount = jobs.filter(j => j.external_apply_url).length;
   const easyApplyCount = jobs.length - externalCount;
+  const hasFullDetails = jobs.some(j => j.description);
 
   let html = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
@@ -538,8 +534,16 @@ function displayJobCards(jobs, resultsDiv, tab, keywords, location, timeFilter) 
       <div style="font-size:11px; color:var(--text-muted); font-family:'DM Mono',monospace;">
         ${externalCount} external • ${easyApplyCount} easy apply
       </div>
-    </div>
-    <div class="job-cards">`;
+    </div>`;
+  
+  // Add notice if running on Vercel without full details
+  if (!hasFullDetails) {
+    html += `<div class="notice" style="border-left-color:#ffb84d; margin-bottom:16px; font-size:12px;">
+      <strong>Note:</strong> Running in fast mode - showing basic job info. For full descriptions and external apply links, run locally: <code>python app.py</code>
+    </div>`;
+  }
+  
+  html += '<div class="job-cards">';
 
   jobs.forEach(job => {
     // Determine apply link and button style
@@ -560,7 +564,7 @@ function displayJobCards(jobs, resultsDiv, tab, keywords, location, timeFilter) 
       jobTypeLine = `<div class="job-type">${typeInfo.join(' • ')}</div>`;
     }
     
-    // Description preview
+    // Description preview (only if available)
     let descriptionPreview = '';
     if (job.description) {
       const preview = job.description.substring(0, 200).replace(/\n/g, ' ');
