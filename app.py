@@ -120,14 +120,15 @@ Return ONLY valid JSON, no markdown, no explanation."""
 @app.route('/api/scrape-linkedin', methods=['POST'])
 def scrape_linkedin():
     """
-    Scrape LinkedIn jobs and return actual job listings
+    Scrape LinkedIn jobs and return actual job listings with full details
     
     Request body:
     {
         "keywords": "Machine Learning Engineer",
         "location": "San Francisco",
         "time_filter": "r86400",
-        "max_results": 25
+        "max_results": 25,
+        "fetch_details": true  (optional, default true)
     }
     
     Returns:
@@ -138,9 +139,14 @@ def scrape_linkedin():
                 "title": "ML Engineer",
                 "company": "Company Name",
                 "location": "San Francisco, CA",
-                "link": "https://linkedin.com/jobs/view/123456",
-                "apply_link": "https://linkedin.com/jobs/view/123456",
+                "linkedin_url": "https://linkedin.com/jobs/view/123456",
+                "external_apply_url": "https://company.com/apply" (if available),
+                "apply_type": "external" or "linkedin_easy_apply",
                 "posted_date": "2026-02-12",
+                "posted_ago": "Posted 2 days ago",
+                "employment_type": "Full-time",
+                "seniority_level": "Mid-Senior level",
+                "description": "Full job description text...",
                 "salary": "$150k-$200k" (if available)
             }
         ]
@@ -151,22 +157,28 @@ def scrape_linkedin():
     keywords = data.get('keywords', '')
     location = data.get('location', 'United States')
     time_filter = data.get('time_filter', 'r86400')
-    max_results = data.get('max_results', 25)
+    max_results = data.get('max_results', 10)
+    fetch_details = data.get('fetch_details', True)  # Default to fetching full details
     
     if not keywords:
         return jsonify({'error': 'Keywords required'}), 400
+    
+    # Cap at 25 to prevent extreme timeouts
+    max_results = min(max_results, 25)
     
     try:
         jobs = linkedin_scraper.search_jobs(
             keywords=keywords,
             location=location,
             time_filter=time_filter,
-            max_results=max_results
+            max_results=max_results,
+            fetch_details=fetch_details
         )
         
         return jsonify({
             'jobs': jobs,
-            'count': len(jobs)
+            'count': len(jobs),
+            'has_full_details': fetch_details
         })
     
     except Exception as e:

@@ -122,6 +122,16 @@ textarea { min-height:180px; resize:vertical; line-height:1.6; }
   font-size:12px; color:var(--text-muted); margin-bottom:8px;
 }
 
+.job-type {
+  font-size:11px; color:var(--text-muted); margin-bottom:8px;
+  font-family:'DM Mono',monospace;
+}
+
+.job-description-preview {
+  font-size:12px; color:var(--text-dim); line-height:1.5;
+  margin-top:10px; padding-top:10px; border-top:1px solid var(--border);
+}
+
 .job-footer {
   display:flex; justify-content:space-between; align-items:center;
   margin-top:12px; padding-top:12px; border-top:1px solid var(--border);
@@ -139,6 +149,22 @@ textarea { min-height:180px; resize:vertical; line-height:1.6; }
 }
 
 .job-apply-btn:hover {
+  background:var(--accent-dim);
+}
+
+.job-apply-btn.external {
+  background:#ff6b7a; /* Red for external links */
+}
+
+.job-apply-btn.external:hover {
+  background:#e05566;
+}
+
+.job-apply-btn.easy-apply {
+  background:var(--accent); /* Teal/green for Easy Apply */
+}
+
+.job-apply-btn.easy-apply:hover {
   background:var(--accent-dim);
 }
 
@@ -211,6 +237,14 @@ footer a:hover { text-decoration:underline; text-underline-offset:2px; }
       <label>Job Title</label>
       <input type="text" id="aiml-jobTitle" placeholder="e.g., Machine Learning Engineer, LLM Engineer" />
 
+      <label>Number of Jobs</label>
+      <select id="aiml-jobCount">
+        <option value="10" selected>10 jobs</option>
+        <option value="15">15 jobs</option>
+        <option value="20">20 jobs</option>
+        <option value="25">25 jobs</option>
+      </select>
+
       <label>Time Range</label>
       <select id="aiml-timeFilter">
         <option value="24hours" selected>Past 24 Hours</option>
@@ -257,6 +291,14 @@ footer a:hover { text-decoration:underline; text-underline-offset:2px; }
         <label>Custom Job Title</label>
         <input type="text" id="gmp-customTitle" placeholder="e.g., GMP Quality Specialist" />
       </div>
+
+      <label>Number of Jobs</label>
+      <select id="gmp-jobCount">
+        <option value="10" selected>10 jobs</option>
+        <option value="15">15 jobs</option>
+        <option value="20">20 jobs</option>
+        <option value="25">25 jobs</option>
+      </select>
 
       <label>Time Range</label>
       <select id="gmp-timeFilter">
@@ -400,12 +442,13 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function scrapeLinkedInJobs(tab) {
-  let keywords, location, timeFilter, resultsDiv;
+  let keywords, location, timeFilter, maxResults, resultsDiv;
   
   if (tab === 'aiml') {
     keywords = document.getElementById('aiml-jobTitle').value.trim();
     location = AIML_LOCATIONS[document.getElementById('aiml-locationFilter').value];
     timeFilter = LINKEDIN_TIME[document.getElementById('aiml-timeFilter').value];
+    maxResults = parseInt(document.getElementById('aiml-jobCount').value);
     resultsDiv = document.getElementById('aiml-results');
   } else {
     const roleType = document.getElementById('gmp-roleType').value;
@@ -416,6 +459,7 @@ async function scrapeLinkedInJobs(tab) {
     }
     location = GMP_LOCATIONS[document.getElementById('gmp-locationFilter').value];
     timeFilter = LINKEDIN_TIME[document.getElementById('gmp-timeFilter').value];
+    maxResults = parseInt(document.getElementById('gmp-jobCount').value);
     resultsDiv = document.getElementById('gmp-results');
   }
 
@@ -424,7 +468,8 @@ async function scrapeLinkedInJobs(tab) {
     return;
   }
 
-  resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div><div>Scraping LinkedIn jobs...</div></div>';
+  const estimatedTime = Math.ceil(maxResults * 2.5);
+  resultsDiv.innerHTML = `<div class="loading"><div class="spinner"></div><div>Scraping ${maxResults} LinkedIn jobs and fetching details...<br>Estimated time: ${estimatedTime}-${estimatedTime + 10} seconds</div></div>`;
 
   try {
     const response = await fetch('/api/scrape-linkedin', {
@@ -434,7 +479,8 @@ async function scrapeLinkedInJobs(tab) {
         keywords: keywords,
         location: location,
         time_filter: timeFilter,
-        max_results: 25
+        max_results: maxResults,
+        fetch_details: true
       })
     });
 
@@ -443,7 +489,7 @@ async function scrapeLinkedInJobs(tab) {
     }
 
     const data = await response.json();
-    displayJobCards(data.jobs, resultsDiv);
+    displayJobCards(data.jobs, resultsDiv, tab, keywords, location, timeFilter);
 
   } catch (error) {
     console.error('Error:', error);
@@ -455,24 +501,62 @@ async function scrapeLinkedInJobs(tab) {
   }
 }
 
-function displayJobCards(jobs, resultsDiv) {
+function displayJobCards(jobs, resultsDiv, tab, keywords, location, timeFilter) {
   if (!jobs || jobs.length === 0) {
     resultsDiv.innerHTML = '<div class="notice">No jobs found. Try adjusting your search criteria or use the "Search All Platforms" button.</div>';
     return;
   }
 
-  let html = `<h3>Found ${jobs.length} LinkedIn Jobs</h3><div class="job-cards">`;
+  // Count job types
+  const externalCount = jobs.filter(j => j.external_apply_url).length;
+  const easyApplyCount = jobs.length - externalCount;
+
+  let html = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3>Found ${jobs.length} LinkedIn Jobs</h3>
+      <div style="font-size:11px; color:var(--text-muted); font-family:'DM Mono',monospace;">
+        ${externalCount} external • ${easyApplyCount} easy apply
+      </div>
+    </div>
+    <div class="job-cards">`;
 
   jobs.forEach(job => {
+    // Determine apply link and button style
+    const applyUrl = job.external_apply_url || job.linkedin_url || job.link || '#';
+    const isExternal = !!job.external_apply_url;
+    const applyText = isExternal ? 'Apply on Company Site' : 'Easy Apply';
+    const applyClass = isExternal ? 'job-apply-btn external' : 'job-apply-btn easy-apply';
+    
+    // Format posted date
+    const postedDate = job.posted_date_formatted || job.posted_ago || job.posted_date || 'Recently';
+    
+    // Build job type line
+    let jobTypeLine = '';
+    const typeInfo = [];
+    if (job.employment_type) typeInfo.push(job.employment_type);
+    if (job.seniority_level) typeInfo.push(job.seniority_level);
+    if (typeInfo.length > 0) {
+      jobTypeLine = `<div class="job-type">${typeInfo.join(' • ')}</div>`;
+    }
+    
+    // Description preview
+    let descriptionPreview = '';
+    if (job.description) {
+      const preview = job.description.substring(0, 200).replace(/\n/g, ' ');
+      descriptionPreview = `<div class="job-description-preview">${preview}...</div>`;
+    }
+    
     html += `
       <div class="job-card">
         <div class="job-title">${job.title}</div>
         <div class="job-company">${job.company}</div>
         <div class="job-location">${job.location}</div>
+        ${jobTypeLine}
+        ${descriptionPreview}
         <div class="job-footer">
-          <div class="job-date">${job.posted_date}</div>
-          <a href="${job.apply_link}" target="_blank" class="job-apply-btn">
-            Apply on LinkedIn
+          <div class="job-date">${postedDate}</div>
+          <a href="${applyUrl}" target="_blank" class="${applyClass}">
+            ${applyText}
           </a>
         </div>
       </div>
